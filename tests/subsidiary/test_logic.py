@@ -74,17 +74,23 @@ def test_score_version_ignores_unversioned_tuning_but_tracks_reference_edits():
 
 
 def test_multi_label_assigns_every_match():
+    # Multi-label still works when each subsidiary owns a DISTINCT phrase.
     subsidiaries = _fixture()
     subsidiaries.append({
-        "subsidiary": "CableCo", "threshold": 0.5, "phrases": ["lt cable"],
-        "keywords": [{"phrase": "lt cable", "role": "OWN_BUSINESS",
+        "subsidiary": "CableCo", "threshold": 0.5, "phrases": ["control cable"],
+        "keywords": [{"phrase": "control cable", "role": "OWN_BUSINESS",
                       "aliasGroup": "cable", "negativeStrength": None}],
     })
-    matches = aggregate(["lt cable"], {"lt cable": {"Laser": 1.0, "CableCo": 0.66}}, subsidiaries)
+    matches = aggregate(["lt cable", "control cable"],
+                        {"lt cable": {"Laser": 1.0},
+                         "control cable": {"CableCo": 0.66}}, subsidiaries)
     assert matches == ["Laser", "CableCo"]
 
 
-def test_shared_phrase_is_evaluated_for_each_subsidiary_role():
+def test_phrase_shared_across_subsidiaries_is_non_discriminative():
+    # A phrase owned by more than one subsidiary cannot tell them apart, so it
+    # contributes to none of them (guards against generic terms like "power
+    # transmission" matching every subsidiary that lists them).
     subsidiaries = [
         {"subsidiary": "Laser", "threshold": 0.5, "phrases": ["power transmission"],
          "keywords": [{"phrase": "power transmission", "role": "OWN_BUSINESS",
@@ -96,7 +102,7 @@ def test_shared_phrase_is_evaluated_for_each_subsidiary_role():
     matches = aggregate(["power transmission"],
                         {"power transmission": {"Laser": 1.0, "UIC": 1.0}},
                         subsidiaries)
-    assert matches == ["Laser"]
+    assert matches == []
 
 
 def test_vocabulary_version_tracks_reference_edits():

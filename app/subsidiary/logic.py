@@ -70,13 +70,24 @@ def aggregate(phrases, score_vectors, subsidiaries, top_n=None):
     penalise a match. Gold-set validation showed the veto/penalty step dropped
     genuine matches (incidental product lines like "automotive cable" killed
     otherwise-correct cable firms) without preventing real false positives.
+
+    A phrase only counts toward a subsidiary when it is a positive keyword for
+    exactly one subsidiary. Phrases shared across subsidiaries (generic terms
+    like "power transmission" or "epc") do not discriminate between them, so
+    they are ignored — otherwise any company mentioning them matches every
+    subsidiary that lists them.
     """
     top_n = top_n or config.MATCH_TOP_N
     reference = defaultdict(list)
+    owners = defaultdict(set)
     for subsidiary in subsidiaries:
+        owner = subsidiary["subsidiary"]
         for item in subsidiary["keywords"]:
-            reference[normalize_phrase(item["phrase"])].append(
-                {**item, "subsidiary": item.get("subsidiary", subsidiary["subsidiary"])})
+            if item.get("negativeStrength") is not None:
+                continue
+            key = normalize_phrase(item["phrase"])
+            owners[key].add(owner)
+            reference[key].append({**item, "subsidiary": item.get("subsidiary", owner)})
 
     matched = []
     for subsidiary in subsidiaries:
@@ -85,22 +96,20 @@ def aggregate(phrases, score_vectors, subsidiaries, top_n=None):
         subsidiary_top_n = int(subsidiary.get("topN", top_n))
         for phrase in phrases:
             key = normalize_phrase(phrase)
-            items = reference.get(key, [])
-            if not items:
+            if len(owners.get(key, ())) != 1:
                 continue
-            bucket = float((score_vectors.get(key) or {}).get(name, 0.0) or 0.0)
-            target_items = [item for item in items if item["subsidiary"] == name]
+            items = reference.get(key, [])
+            target_items = [item for item in items
+                            if item.get("subsidiary") == name
+                            and item.get("negativeStrength") is None]
             if not target_items:
                 continue
-            positives_only = [item for item in target_items
-                              if item.get("negativeStrength") is None]
-            if not positives_only:
-                continue
-            weights = [ROLE_WEIGHTS.get(item.get("role"), 0.0) for item in positives_only]
-            weight = max(weights, default=0.0)
+            bucket = float((score_vectors.get(key) or {}).get(name, 0.0) or 0.0)
+            weight = max((ROLE_WEIGHTS.get(item.get("role"), 0.0)
+                          for item in target_items), default=0.0)
             if weight <= 0 or bucket <= 0:
                 continue
-            alias = next((item.get("aliasGroup") for item in positives_only
+            alias = next((item.get("aliasGroup") for item in target_items
                           if item.get("aliasGroup")), None) or key
             positives[alias] = max(positives[alias], bucket * weight)
 
