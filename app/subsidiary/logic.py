@@ -23,8 +23,23 @@ def normalize_phrase(value):
     return phrase
 
 
-def extract_version(model, prompt):
-    payload = "extract|%s|%s|%s" % (model, prompt, NORMALIZATION_VERSION)
+def extract_version(model, prompt, vocabulary_sig=""):
+    payload = "extract|%s|%s|%s|%s" % (
+        model, prompt, NORMALIZATION_VERSION, vocabulary_sig)
+    return hashlib.sha1(payload.encode("utf-8")).hexdigest()[:12]
+
+
+def vocabulary_version(subsidiaries):
+    """Signature of the reference keywords that extraction is steered toward.
+
+    Feeding keywords into the extractor means a keyword edit must invalidate
+    cached extractions; folding this into extract_version does that cheaply —
+    the worker re-extracts from persisted search results, no new search.
+    """
+    payload = "|".join(sorted(
+        normalize_phrase(item.get("phrase"))
+        for subsidiary in subsidiaries
+        for item in subsidiary.get("keywords", [])))
     return hashlib.sha1(payload.encode("utf-8")).hexdigest()[:12]
 
 

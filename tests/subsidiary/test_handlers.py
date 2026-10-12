@@ -71,7 +71,7 @@ def test_process_company_writes_matches_for_fresh_company(monkeypatch):
     fake = FakeDB()
     monkeypatch.setattr(handlers, "db", fake)
     monkeypatch.setattr(handlers.ai, "extract_phrases",
-                        lambda company, state, sources: ["lt cable"])
+                        lambda company, state, sources, subsidiaries: ["lt cable"])
     monkeypatch.setattr(handlers.ai, "score_phrases",
                         lambda phrases, subsidiaries: {"lt cable": {"LASER": 1.0}})
     monkeypatch.setattr(handlers.search, "search",
@@ -130,7 +130,7 @@ def test_aggregate_only_never_searches(monkeypatch):
 def test_process_payload_wraps_unexpected_errors_as_error(monkeypatch):
     monkeypatch.setattr(handlers, "db", FakeDB())
 
-    def broken(company, state, sources):
+    def broken(company, state, sources, subsidiaries):
         raise RuntimeError("extractor exploded")
 
     monkeypatch.setattr(handlers.search, "search",

@@ -12,8 +12,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import pika  # noqa: E402
 
 from app.subsidiary import config  # noqa: E402
-from app.subsidiary.db import get_contact_hints, has_extraction, pending_companies  # noqa: E402
-from app.subsidiary.logic import extract_version  # noqa: E402
+from app.subsidiary.db import get_contact_hints, get_subsidiaries, has_extraction, pending_companies  # noqa: E402
+from app.subsidiary.logic import extract_version, vocabulary_version  # noqa: E402
 from app.subsidiary.handlers import EXTRACT_PROMPT_VERSION  # noqa: E402
 
 
@@ -35,7 +35,8 @@ def main():
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--rebuild", action="store_true")
     args = parser.parse_args()
-    version = extract_version(config.LLM_MODEL, EXTRACT_PROMPT_VERSION)
+    version = extract_version(config.LLM_MODEL, EXTRACT_PROMPT_VERSION,
+                              vocabulary_version(get_subsidiaries()))
     unprocessed = pending_companies(version, rebuild=args.rebuild)
     companies = list(dict.fromkeys(unprocessed))
     logging.basicConfig(level=logging.INFO)

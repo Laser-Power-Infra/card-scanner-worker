@@ -1,4 +1,5 @@
-from app.subsidiary.logic import aggregate, extract_version, score_versions
+from app.subsidiary.logic import (aggregate, extract_version, score_versions,
+                                  vocabulary_version)
 
 
 def _fixture(threshold=0.5):
@@ -94,6 +95,28 @@ def test_shared_phrase_is_evaluated_for_each_subsidiary_role():
                         {"power transmission": {"Laser": 1.0, "UIC": 1.0}},
                         subsidiaries)
     assert matches == ["Laser"]
+
+
+def test_vocabulary_version_tracks_reference_edits():
+    base = _fixture()
+    v0 = vocabulary_version(base)
+
+    # Editing the reference keywords must move both the vocabulary signature
+    # and the extraction version (so cached extractions re-run).
+    edited = [dict(base[0], keywords=[dict(k) for k in base[0]["keywords"]] + [
+        {"phrase": "new keyword", "role": "OWN_BUSINESS", "aliasGroup": None,
+         "negativeStrength": None}])]
+    assert vocabulary_version(edited) != v0
+    assert extract_version("m", "p", vocabulary_version(edited)) != \
+        extract_version("m", "p", v0)
+
+    # A no-op reorder of the same keywords is stable.
+    same = [dict(base[0], keywords=list(reversed([dict(k) for k in base[0]["keywords"]])))]
+    assert vocabulary_version(same) == v0
+
+
+def test_vocabulary_version_is_empty_string_safe():
+    assert vocabulary_version([]) == vocabulary_version([])
 
 
 def test_penalty_is_applied_and_veto_matches_are_prechecked():

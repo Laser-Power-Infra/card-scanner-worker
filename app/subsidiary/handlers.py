@@ -5,7 +5,7 @@ import logging
 from . import ai, config, db, logic, search
 
 log = logging.getLogger("subsidiary.handlers")
-EXTRACT_PROMPT_VERSION = "industry-phrase-extraction-v1"
+EXTRACT_PROMPT_VERSION = "industry-phrase-extraction-v2"
 SCORE_PROMPT_VERSION = "subsidiary-phrase-scoring-v1"
 
 
@@ -69,7 +69,9 @@ def process_company(payload, *, dry_run=False):
     if payload.get("aggregate_only"):
         return aggregate_company(company, dry_run=dry_run)
 
-    extract_version = logic.extract_version(config.LLM_MODEL, EXTRACT_PROMPT_VERSION)
+    extract_version = logic.extract_version(
+        config.LLM_MODEL, EXTRACT_PROMPT_VERSION,
+        logic.vocabulary_version(subsidiaries))
     score_version_map = logic.score_versions(config.LLM_MODEL, SCORE_PROMPT_VERSION, subsidiaries)
     header = db.header(company)
     prior_extract_version = header.get("extractVersion") if header else None
@@ -89,7 +91,8 @@ def process_company(payload, *, dry_run=False):
             # A changed extraction prompt reuses persisted search results.
             sources = source_data.get("results", [])
             if sources:
-                phrases = ai.extract_phrases(company, hint.get("state", ""), sources)
+                phrases = ai.extract_phrases(company, hint.get("state", ""), sources,
+                                             subsidiaries)
                 source_data["phrases"] = phrases
                 if not dry_run:
                     db.upsert_header(company, "OK", extract_version, source_data)
@@ -120,7 +123,8 @@ def process_company(payload, *, dry_run=False):
         # re-extract without paying for another search call.
         if not dry_run:
             db.persist_search_results(company, extract_version, sources)
-        phrases = ai.extract_phrases(company, hint.get("state", ""), sources)
+        phrases = ai.extract_phrases(company, hint.get("state", ""), sources,
+                                     subsidiaries)
         source_data["phrases"] = phrases
         if not dry_run:
             db.upsert_header(company, "OK", extract_version, source_data)

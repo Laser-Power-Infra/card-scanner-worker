@@ -46,7 +46,21 @@ def _call(prompt, schema_name, schema, max_tokens):
     return json.loads(text)
 
 
-def extract_phrases(company, state, sources):
+def _vocabulary_block(subsidiaries):
+    """The subsidiary keyword phrases, as a flat sorted list.
+
+    Extraction must be able to reuse these phrases verbatim: the aggregator
+    only credits an extracted phrase when it equals a reference keyword, so a
+    company can only match by speaking the reference vocabulary.
+    """
+    phrases = sorted({p for s in (subsidiaries or [])
+                      for p in (s.get("phrases") or []) if p})
+    if not phrases:
+        return ""
+    return "\n".join("- " + p for p in phrases)
+
+
+def extract_phrases(company, state, sources, subsidiaries=None):
     source_text = "\n\n".join(
         "SOURCE: %s\n%s" % (item.get("url", ""), item.get("text", ""))
         for item in sources if item.get("text"))[:60000]
@@ -56,15 +70,24 @@ def extract_phrases(company, state, sources):
                                    "maxItems": config.MATCH_MAX_PHRASES}},
         "required": ["phrases"],
     }
+    vocabulary = _vocabulary_block(subsidiaries)
+    vocab_clause = ""
+    if vocabulary:
+        vocab_clause = (
+            "Reuse the subsidiary vocabulary phrases below verbatim whenever the "
+            "company genuinely offers that product or capability, so they stay "
+            "comparable to the reference; otherwise return your own precise "
+            "phrases. Do not force a match.\nSubsidiary vocabulary:\n%s\n"
+            % vocabulary)
     prompt = (
         "Extract business-relevant phrases describing what this company actually makes, "
         "sells, or does. Prefer precise multi-word trade/industry phrases; do not output "
         "single generic words, company names, location, or procurement terms. "
         "Include customer-sector or application phrases when explicitly stated. "
-        "Use vocabulary near these subsidiary keyword lists when "
-        "semantically equivalent, but do not force a match. Return most specific phrases "
-        "first, at most %d.\nCompany: %s\nState: %s\nSources:\n%s" %
-        (config.MATCH_MAX_PHRASES, company, state or "unknown", source_text))
+        "%s"
+        "Return most specific phrases first, at most %d.\n"
+        "Company: %s\nState: %s\nSources:\n%s" %
+        (vocab_clause, config.MATCH_MAX_PHRASES, company, state or "unknown", source_text))
     data = _call(prompt, "industry_phrases", schema, 1500)
     return _canonical_phrases(data.get("phrases", []))
 
