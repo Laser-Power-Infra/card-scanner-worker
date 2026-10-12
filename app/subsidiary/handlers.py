@@ -8,6 +8,27 @@ log = logging.getLogger("subsidiary.handlers")
 EXTRACT_PROMPT_VERSION = "industry-phrase-extraction-v2"
 SCORE_PROMPT_VERSION = "subsidiary-phrase-scoring-v1"
 
+# Cache-effectiveness counters, updated per company and readable via cache_stats()
+# so a long batch run can report how much the header + shared phrase caches saved.
+CACHE_STATS = {"companies": 0, "phrases": 0, "header": 0, "shared": 0,
+               "stale": 0, "score_calls": 0}
+
+
+def cache_stats():
+    """Snapshot of cache counters, plus derived hit rates."""
+    s = dict(CACHE_STATS)
+    total = max(s["phrases"], 1)
+    s["header_rate"] = 100.0 * s["header"] / total
+    s["shared_rate"] = 100.0 * s["shared"] / total
+    s["hit_rate"] = 100.0 * (s["header"] + s["shared"]) / total
+    s["score_call_rate"] = 100.0 * s["score_calls"] / max(s["companies"], 1)
+    return s
+
+
+def reset_cache_stats():
+    for key in CACHE_STATS:
+        CACHE_STATS[key] = 0
+
 
 def _source_domain_hint(sources):
     domains = []
@@ -157,17 +178,33 @@ def process_company(payload, *, dry_run=False):
     header_vectors = source_data.get("keywordVectors", {})
     vectors = {}
     stale_phrases = []
+    header_hits = shared_hits = 0
     for phrase in phrases:
         cached = header_vectors.get(phrase)
         if cached:
+            header_hits += 1
             vectors[phrase] = logic.version_valid_scores(cached, score_version_map)
-        shared = None if cached else db.get_keyword_vector_cache(phrase)
-        if shared:
-            shared_scores = logic.version_valid_scores(shared, score_version_map)
-            vectors.setdefault(phrase, {}).update(shared_scores)
+        else:
+            shared = db.get_keyword_vector_cache(phrase)
+            if shared:
+                shared_hits += 1
+                vectors.setdefault(phrase, {}).update(
+                    logic.version_valid_scores(shared, score_version_map))
         missing = [name for name in score_version_map if name not in vectors.get(phrase, {})]
         if missing:
             stale_phrases.append(phrase)
+
+    CACHE_STATS["companies"] += 1
+    CACHE_STATS["phrases"] += len(phrases)
+    CACHE_STATS["header"] += header_hits
+    CACHE_STATS["shared"] += shared_hits
+    CACHE_STATS["stale"] += len(stale_phrases)
+    if stale_phrases:
+        CACHE_STATS["score_calls"] += 1
+    log.info("cache[%s]: phrases=%d header=%d shared=%d stale=%d cumulative_hit=%.1f%%",
+             company, len(phrases), header_hits, shared_hits, len(stale_phrases),
+             100.0 * (CACHE_STATS["header"] + CACHE_STATS["shared"])
+             / max(CACHE_STATS["phrases"], 1))
 
     rescored = False
     if stale_phrases:
