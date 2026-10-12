@@ -1,5 +1,5 @@
 from app.subsidiary.logic import (aggregate, extract_version, score_versions,
-                                  vocabulary_version)
+                                  subsidiary_scores, vocabulary_version)
 
 
 def _fixture(threshold=0.5):
@@ -125,6 +125,15 @@ def test_vocabulary_version_tracks_reference_edits():
 
 def test_vocabulary_version_is_empty_string_safe():
     assert vocabulary_version([]) == vocabulary_version([])
+
+
+def test_subsidiary_scores_exposes_the_raw_signal():
+    # aggregate is a threshold over these scores; the bare score lets callers
+    # tell "borderline" (score > 0) from "no evidence" (score == 0).
+    subsidiaries = _fixture()
+    scores = subsidiary_scores(["lt cable"], {"lt cable": {"Laser": 0.4}}, subsidiaries)
+    assert scores == {"Laser": 0.4}
+    assert aggregate(["lt cable"], {"lt cable": {"Laser": 0.4}}, subsidiaries) == []
 
 
 def test_penalty_keyword_does_not_reduce_a_match():

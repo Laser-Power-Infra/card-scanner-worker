@@ -184,7 +184,12 @@ def process_company(payload, *, dry_run=False):
     if not dry_run and (rescored or current_matches is None or prior_extract_version != extract_version):
         db.write_matches(company, matches)
     if not matches:
-        _record_review(company, "no_match", phrases, extract_version, subsidiaries, dry_run)
+        # Only borderline companies (some vocabulary signal) are worth a review
+        # row; a zero max score means the extracted phrases never overlapped the
+        # reference at all, so there is nothing for a human to adjudicate.
+        scores = logic.subsidiary_scores(phrases, vectors, subsidiaries)
+        if max(scores.values(), default=0.0) > 0:
+            _record_review(company, "no_match", phrases, extract_version, subsidiaries, dry_run)
     return "ok", {"company": company, "status": "OK", "phrase_count": len(phrases),
                    "matches": matches, "cached": not bool(stale_phrases)}
 

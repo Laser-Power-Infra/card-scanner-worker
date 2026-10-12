@@ -61,8 +61,8 @@ def score_versions(model, prompt, subsidiaries):
     return versions
 
 
-def aggregate(phrases, score_vectors, subsidiaries, top_n=None):
-    """Return subsidiary names whose weighted max score clears threshold.
+def subsidiary_scores(phrases, score_vectors, subsidiaries, top_n=None):
+    """Weighted max score per subsidiary (the raw signal behind aggregate).
 
     Phrase rows should have keyword, scores, and version-valid vectors. The
     reference includes each phrase's role and aliasGroup. Negative-strategy
@@ -88,7 +88,7 @@ def aggregate(phrases, score_vectors, subsidiaries, top_n=None):
             owners[key].add(owner)
             reference[key].append({**item, "subsidiary": item.get("subsidiary", owner)})
 
-    matched = []
+    scores = {}
     for subsidiary in subsidiaries:
         name = subsidiary["subsidiary"]
         positives = defaultdict(float)
@@ -110,12 +110,16 @@ def aggregate(phrases, score_vectors, subsidiaries, top_n=None):
             alias = next((item.get("aliasGroup") for item in target_items
                           if item.get("aliasGroup")), None) or key
             positives[alias] = max(positives[alias], bucket * weight)
-
         best = sorted(positives.values(), reverse=True)[:subsidiary_top_n]
-        score = max(best, default=0.0)
-        if score >= float(subsidiary.get("threshold", 0.5)):
-            matched.append(name)
-    return matched
+        scores[name] = max(best, default=0.0)
+    return scores
+
+
+def aggregate(phrases, score_vectors, subsidiaries, top_n=None):
+    """Subsidiary names whose weighted max score clears their threshold."""
+    scores = subsidiary_scores(phrases, score_vectors, subsidiaries, top_n=top_n)
+    return [s["subsidiary"] for s in subsidiaries
+            if scores.get(s["subsidiary"], 0.0) >= float(s.get("threshold", 0.5))]
 
 
 def shared_phrase_owners(phrases, subsidiaries):

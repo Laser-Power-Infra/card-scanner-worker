@@ -103,21 +103,38 @@ def test_process_company_no_data_clears_matches_without_writing(monkeypatch):
     assert ("record_review", "Empty Co", "no_data") in fake.calls
 
 
-def test_unmatched_company_is_queued_for_review(monkeypatch):
+def test_borderline_company_is_queued_for_review(monkeypatch):
     fake = FakeDB()
     monkeypatch.setattr(handlers, "db", fake)
     monkeypatch.setattr(handlers.ai, "extract_phrases",
-                        lambda company, state, sources, subsidiaries: ["obscure widget"])
+                        lambda company, state, sources, subsidiaries: ["lt cable"])
     monkeypatch.setattr(handlers.ai, "score_phrases",
-                        lambda phrases, subsidiaries: {"obscure widget": {"LASER": 0.0}})
+                        lambda phrases, subsidiaries: {"lt cable": {"LASER": 0.4}})
     monkeypatch.setattr(handlers.search, "search",
-                        lambda query, domains=None: [{"url": "u", "text": "obscure widget maker"}])
+                        lambda query, domains=None: [{"url": "u", "text": "lt cable maker"}])
 
     outcome, result = handlers.process_company({"company": "Widget Co", "hint": {}})
 
     assert outcome == "ok"
     assert result["matches"] == []
     assert ("record_review", "Widget Co", "no_match") in fake.calls
+
+
+def test_zero_signal_company_is_not_queued_for_review(monkeypatch):
+    fake = FakeDB()
+    monkeypatch.setattr(handlers, "db", fake)
+    monkeypatch.setattr(handlers.ai, "extract_phrases",
+                        lambda company, state, sources, subsidiaries: ["lt cable"])
+    monkeypatch.setattr(handlers.ai, "score_phrases",
+                        lambda phrases, subsidiaries: {"lt cable": {"LASER": 0.0}})
+    monkeypatch.setattr(handlers.search, "search",
+                        lambda query, domains=None: [{"url": "u", "text": "lt cable maker"}])
+
+    outcome, result = handlers.process_company({"company": "Widget Co", "hint": {}})
+
+    assert outcome == "ok"
+    assert result["matches"] == []
+    assert not any(call[0] == "record_review" for call in fake.calls)
 
 
 def test_aggregate_only_never_searches(monkeypatch):
