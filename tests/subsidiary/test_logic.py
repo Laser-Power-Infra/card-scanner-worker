@@ -30,14 +30,16 @@ def test_aliases_count_once_and_procurement_does_not_score():
     assert matches == ["Laser"]
 
 
-def test_veto_blocks_otherwise_matching_company():
+def test_negative_keywords_no_longer_block_a_match():
+    # A VETO keyword on an incidental product line must not kill an otherwise
+    # genuine match; the negative keyword is inert.
     subsidiaries = _fixture()
     matches = aggregate(
         ["lt cable", "automotive cable"],
         {"lt cable": {"Laser": 1.0}, "automotive cable": {"Laser": 1.0}},
         subsidiaries,
     )
-    assert matches == []
+    assert matches == ["Laser"]
 
 
 def test_threshold_and_version_scoping():
@@ -119,7 +121,7 @@ def test_vocabulary_version_is_empty_string_safe():
     assert vocabulary_version([]) == vocabulary_version([])
 
 
-def test_penalty_is_applied_and_veto_matches_are_prechecked():
+def test_penalty_keyword_does_not_reduce_a_match():
     subsidiaries = [{
         "subsidiary": "Laser", "threshold": 0.5, "phrases": ["lt cable", "data cable"],
         "keywords": [
@@ -135,7 +137,7 @@ def test_penalty_is_applied_and_veto_matches_are_prechecked():
     assert matches == ["Laser"]
 
 
-def test_positive_phrase_vetoes_even_when_not_in_extracted_phrase_list():
+def test_negative_keyword_is_inert_even_when_scored_highly():
     subsidiaries = [{
         "subsidiary": "GMD", "threshold": 0.5,
         "phrases": ["industrial valves", "tyre valve"],
@@ -151,4 +153,4 @@ def test_positive_phrase_vetoes_even_when_not_in_extracted_phrase_list():
         {"industrial valves": {"GMD": 1.0}, "tyre valve": {"GMD": 1.0}},
         subsidiaries,
     )
-    assert matches == []
+    assert matches == ["GMD"]

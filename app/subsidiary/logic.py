@@ -10,7 +10,6 @@ ROLE_WEIGHTS = {"OWN_BUSINESS": config.MATCH_WEIGHT_OWN_BUSINESS,
                 "TECHNICAL": config.MATCH_WEIGHT_TECHNICAL,
                 "DEMAND_SIDE": config.MATCH_WEIGHT_DEMAND_SIDE,
                 "PROCUREMENT": 0.0}
-PENALTY_WEIGHT = config.MATCH_PENALTY_WEIGHT
 NORMALIZATION_VERSION = "phrase-normalization-v1"
 
 
@@ -66,7 +65,11 @@ def aggregate(phrases, score_vectors, subsidiaries, top_n=None):
     """Return subsidiary names whose weighted max score clears threshold.
 
     Phrase rows should have keyword, scores, and version-valid vectors. The
-    reference includes each phrase's role, aliasGroup and negativeStrength.
+    reference includes each phrase's role and aliasGroup. Negative-strategy
+    keywords are inert: they never count as positives and no longer veto or
+    penalise a match. Gold-set validation showed the veto/penalty step dropped
+    genuine matches (incidental product lines like "automotive cable" killed
+    otherwise-correct cable firms) without preventing real false positives.
     """
     top_n = top_n or config.MATCH_TOP_N
     reference = defaultdict(list)
@@ -79,26 +82,7 @@ def aggregate(phrases, score_vectors, subsidiaries, top_n=None):
     for subsidiary in subsidiaries:
         name = subsidiary["subsidiary"]
         positives = defaultdict(float)
-        penalties = 0
-        penalty_groups = set()
-        vetoed = False
         subsidiary_top_n = int(subsidiary.get("topN", top_n))
-        subsidiary_keywords = [item for item in subsidiary["keywords"]
-                              if item.get("negativeStrength") is not None]
-        for keyword in subsidiary_keywords:
-            phrase_key = normalize_phrase(keyword["phrase"])
-            bucket = float((score_vectors.get(phrase_key) or {}).get(name, 0.0) or 0.0)
-            if bucket < 0.33:
-                continue
-            if keyword.get("negativeStrength") == "VETO":
-                vetoed = True
-                break
-            group = keyword.get("aliasGroup") or phrase_key
-            if group not in penalty_groups:
-                penalty_groups.add(group)
-                penalties += 1
-        if vetoed:
-            continue
         for phrase in phrases:
             key = normalize_phrase(phrase)
             items = reference.get(key, [])
@@ -120,11 +104,8 @@ def aggregate(phrases, score_vectors, subsidiaries, top_n=None):
                           if item.get("aliasGroup")), None) or key
             positives[alias] = max(positives[alias], bucket * weight)
 
-        if vetoed:
-            continue
         best = sorted(positives.values(), reverse=True)[:subsidiary_top_n]
         score = max(best, default=0.0)
-        score = max(0.0, score - penalties * PENALTY_WEIGHT)
         if score >= float(subsidiary.get("threshold", 0.5)):
             matched.append(name)
     return matched
