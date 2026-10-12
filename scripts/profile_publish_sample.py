@@ -33,10 +33,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import pika  # noqa: E402
 
-from app import ai as ai_mod  # noqa: E402
-from app import config  # noqa: E402
-from app import db as app_db  # noqa: E402
-from app import handlers  # noqa: E402
+from app.profile import ai as ai_mod  # noqa: E402
+from app.profile import config  # noqa: E402
+from app.profile import db as app_db  # noqa: E402
+from app.profile import handlers  # noqa: E402
 
 TAGS = ("linkedin", "whatsapp", "instagram", "facebook", "twitter", "research")
 

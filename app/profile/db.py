@@ -5,13 +5,11 @@ Workers write their slice of a contact's enrichment straight into the shared
 connection per thread is kept open and reused.
 """
 import logging
-import threading
 import time
-from urllib.parse import parse_qs, urlencode, urlparse, urlunparse
 
 import psycopg
-from psycopg.rows import dict_row
 
+from ..shared import db as shared_db
 from . import config
 
 log = logging.getLogger("card-desk.db")
@@ -36,36 +34,9 @@ _WRITABLE = {
     "sources", "location", "career_background", "summary",
 }
 
-_tls = threading.local()
-
-
-def _connect():
-    url = config.DATABASE_URL
-    if not url:
-        raise RuntimeError("DATABASE_URL is not set; add it to .env")
-    try:
-        return psycopg.connect(url, row_factory=dict_row,
-                               autocommit=True, connect_timeout=10)
-    except Exception:
-        # Neon connection strings carry channel_binding=require, which some
-        # libpq builds don't understand. It is optional over TLS, so drop it
-        # rather than fail the whole worker.
-        p = urlparse(url)
-        q = parse_qs(p.query)
-        q.pop("channel_binding", None)
-        url = urlunparse((p.scheme, p.netloc, p.path, p.params,
-                          urlencode(q, doseq=True), p.fragment))
-        return psycopg.connect(url, row_factory=dict_row,
-                               autocommit=True, connect_timeout=10)
-
-
 def get_conn():
     """A psycopg connection owned by the calling thread."""
-    conn = getattr(_tls, "conn", None)
-    if conn is not None and conn.closed == 0:
-        return conn
-    _tls.conn = _connect()
-    return _tls.conn
+    return shared_db.get_conn(config.DATABASE_URL)
 
 
 def _run(sql, params=None):
@@ -76,7 +47,7 @@ def _run(sql, params=None):
             cur.execute(sql, params)
     except psycopg.OperationalError:
         log.warning("DB connection dropped; reconnecting and retrying")
-        _tls.conn = None
+        shared_db.reset_conn()
         with get_conn().cursor() as cur:
             cur.execute(sql, params)
 
@@ -88,7 +59,7 @@ def _fetchone(sql, params=None):
             return cur.fetchone()
     except psycopg.OperationalError:
         log.warning("DB connection dropped; reconnecting and retrying")
-        _tls.conn = None
+        shared_db.reset_conn()
         with get_conn().cursor() as cur:
             cur.execute(sql, params)
             return cur.fetchone()

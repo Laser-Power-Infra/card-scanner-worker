@@ -1,28 +1,13 @@
-"""Runtime configuration for the card-desk workers.
+"""Runtime configuration for the profile-collection workers.
 
-Values come from environment variables; a simple .env file in the project
-root (card-scanner_workers/.env) is loaded if present so local runs work
-without exporting anything.
+Values come from environment variables; the repo-root .env is loaded by the
+shared loader so local runs work without exporting anything.
 """
 import os
-from pathlib import Path
 
-_BASE_DIR = Path(__file__).resolve().parent.parent
+from ..shared.config import load_dotenv
 
-
-def _load_dotenv():
-    path = _BASE_DIR / ".env"
-    if not path.exists():
-        return
-    for line in path.read_text(encoding="utf-8").splitlines():
-        line = line.strip()
-        if not line or line.startswith("#") or "=" not in line:
-            continue
-        key, _, val = line.partition("=")
-        os.environ.setdefault(key.strip(), val.strip().strip('"').strip("'"))
-
-
-_load_dotenv()
+load_dotenv()
 
 # Shared Postgres (Neon) — the same database Prisma uses for the app.
 DATABASE_URL = os.environ.get("DATABASE_URL", "")
