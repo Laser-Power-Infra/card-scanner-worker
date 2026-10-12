@@ -87,10 +87,10 @@ def test_multi_label_assigns_every_match():
     assert matches == ["Laser", "CableCo"]
 
 
-def test_phrase_shared_across_subsidiaries_is_non_discriminative():
-    # A phrase owned by more than one subsidiary cannot tell them apart, so it
-    # contributes to none of them (guards against generic terms like "power
-    # transmission" matching every subsidiary that lists them).
+def test_phrase_shared_across_subsidiaries_is_downweighted():
+    # A phrase owned by more than one subsidiary is less discriminative, so
+    # its contribution is divided by the owner count: Laser keeps 1.0/2 = 0.5
+    # (clears the bar), UIC's DEMAND_SIDE 0.3/2 = 0.15 does not.
     subsidiaries = [
         {"subsidiary": "Laser", "threshold": 0.5, "phrases": ["power transmission"],
          "keywords": [{"phrase": "power transmission", "role": "OWN_BUSINESS",
@@ -102,7 +102,7 @@ def test_phrase_shared_across_subsidiaries_is_non_discriminative():
     matches = aggregate(["power transmission"],
                         {"power transmission": {"Laser": 1.0, "UIC": 1.0}},
                         subsidiaries)
-    assert matches == []
+    assert matches == ["Laser"]
 
 
 def test_vocabulary_version_tracks_reference_edits():

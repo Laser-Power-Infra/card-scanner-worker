@@ -61,6 +61,9 @@ class FakeDB:
         self.calls.append(("write_matches", list(matches)))
         self.matches = list(matches)
 
+    def record_review(self, company, reason, phrases, shared, extract_version):
+        self.calls.append(("record_review", company, reason))
+
 
 def _score_version_map():
     return logic.score_versions(config.LLM_MODEL, handlers.SCORE_PROMPT_VERSION,
@@ -97,6 +100,24 @@ def test_process_company_no_data_clears_matches_without_writing(monkeypatch):
     assert result["status"] == "NO_DATA"
     assert ("clear_matches", "Empty Co") in fake.calls
     assert not any(call[0] == "write_matches" for call in fake.calls)
+    assert ("record_review", "Empty Co", "no_data") in fake.calls
+
+
+def test_unmatched_company_is_queued_for_review(monkeypatch):
+    fake = FakeDB()
+    monkeypatch.setattr(handlers, "db", fake)
+    monkeypatch.setattr(handlers.ai, "extract_phrases",
+                        lambda company, state, sources, subsidiaries: ["obscure widget"])
+    monkeypatch.setattr(handlers.ai, "score_phrases",
+                        lambda phrases, subsidiaries: {"obscure widget": {"LASER": 0.0}})
+    monkeypatch.setattr(handlers.search, "search",
+                        lambda query, domains=None: [{"url": "u", "text": "obscure widget maker"}])
+
+    outcome, result = handlers.process_company({"company": "Widget Co", "hint": {}})
+
+    assert outcome == "ok"
+    assert result["matches"] == []
+    assert ("record_review", "Widget Co", "no_match") in fake.calls
 
 
 def test_aggregate_only_never_searches(monkeypatch):

@@ -71,11 +71,10 @@ def aggregate(phrases, score_vectors, subsidiaries, top_n=None):
     genuine matches (incidental product lines like "automotive cable" killed
     otherwise-correct cable firms) without preventing real false positives.
 
-    A phrase only counts toward a subsidiary when it is a positive keyword for
-    exactly one subsidiary. Phrases shared across subsidiaries (generic terms
-    like "power transmission" or "epc") do not discriminate between them, so
-    they are ignored — otherwise any company mentioning them matches every
-    subsidiary that lists them.
+    A phrase shared across subsidiaries (generic terms like "power
+    transmission" or "epc") does not discriminate between them, so its
+    contribution is divided by the number of subsidiaries that own it —
+    a term only one subsidiary owns counts in full.
     """
     top_n = top_n or config.MATCH_TOP_N
     reference = defaultdict(list)
@@ -96,8 +95,6 @@ def aggregate(phrases, score_vectors, subsidiaries, top_n=None):
         subsidiary_top_n = int(subsidiary.get("topN", top_n))
         for phrase in phrases:
             key = normalize_phrase(phrase)
-            if len(owners.get(key, ())) != 1:
-                continue
             items = reference.get(key, [])
             target_items = [item for item in items
                             if item.get("subsidiary") == name
@@ -109,6 +106,7 @@ def aggregate(phrases, score_vectors, subsidiaries, top_n=None):
                           for item in target_items), default=0.0)
             if weight <= 0 or bucket <= 0:
                 continue
+            weight /= max(len(owners.get(key, ())), 1)
             alias = next((item.get("aliasGroup") for item in target_items
                           if item.get("aliasGroup")), None) or key
             positives[alias] = max(positives[alias], bucket * weight)
@@ -118,6 +116,27 @@ def aggregate(phrases, score_vectors, subsidiaries, top_n=None):
         if score >= float(subsidiary.get("threshold", 0.5)):
             matched.append(name)
     return matched
+
+
+def shared_phrase_owners(phrases, subsidiaries):
+    """Map each extracted phrase owned by >1 subsidiary to those subsidiaries.
+
+    Used to explain why a company was weakly scored: shared phrases are
+    downweighted in aggregate(), so they are recorded for human review.
+    """
+    owners = defaultdict(set)
+    for subsidiary in subsidiaries:
+        for item in subsidiary["keywords"]:
+            if item.get("negativeStrength") is not None:
+                continue
+            owners[normalize_phrase(item["phrase"])].add(subsidiary["subsidiary"])
+    shared = {}
+    for phrase in phrases:
+        key = normalize_phrase(phrase)
+        names = owners.get(key)
+        if names and len(names) > 1:
+            shared[key] = sorted(names)
+    return shared
 
 
 def version_valid_scores(row, current_versions):

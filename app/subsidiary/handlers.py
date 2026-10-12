@@ -29,6 +29,17 @@ def _search_query(company, hint):
     return query
 
 
+def _record_review(company, reason, phrases, extract_version, subsidiaries, dry_run):
+    """Queue a company for human review (never in dry-run)."""
+    if dry_run:
+        return
+    try:
+        shared = logic.shared_phrase_owners(phrases or [], subsidiaries)
+        db.record_review(company, reason, list(phrases or []), shared, extract_version)
+    except Exception:
+        log.exception("company review write failed for %r", company)
+
+
 def aggregate_company(company, *, dry_run=False):
     header = db.header(company)
     if not header:
@@ -80,6 +91,7 @@ def process_company(payload, *, dry_run=False):
         current_matches = db.company_matches(company)
         if not dry_run and current_matches not in ([], None):
             db.clear_matches(company)
+        _record_review(company, "no_data", [], extract_version, subsidiaries, dry_run)
         return "ok", {"company": company, "status": "NO_DATA", "cached": True, "matches": []}
 
     if header and header.get("status") != "NO_DATA":
@@ -117,6 +129,7 @@ def process_company(payload, *, dry_run=False):
             if not dry_run:
                 db.upsert_header(company, "NO_DATA", extract_version, source_data)
                 db.clear_matches(company)
+            _record_review(company, "no_data", [], extract_version, subsidiaries, dry_run)
             return "ok", {"company": company, "status": "NO_DATA", "matches": []}
         source_data = {**source_data, "query": query, "results": sources}
         # Persist raw search results before extraction so prompt changes can
@@ -134,6 +147,7 @@ def process_company(payload, *, dry_run=False):
             db.upsert_header(company, "NO_DATA", extract_version,
                              {**source_data, "phrases": []})
             db.clear_matches(company)
+        _record_review(company, "no_data", [], extract_version, subsidiaries, dry_run)
         return "ok", {"company": company, "status": "NO_DATA", "matches": []}
 
     if not dry_run:
@@ -169,6 +183,8 @@ def process_company(payload, *, dry_run=False):
     current_matches = db.company_matches(company)
     if not dry_run and (rescored or current_matches is None or prior_extract_version != extract_version):
         db.write_matches(company, matches)
+    if not matches:
+        _record_review(company, "no_match", phrases, extract_version, subsidiaries, dry_run)
     return "ok", {"company": company, "status": "OK", "phrase_count": len(phrases),
                    "matches": matches, "cached": not bool(stale_phrases)}
 

@@ -232,6 +232,26 @@ def write_matches(company, subsidiaries):
         'WHERE "company" = %s', (subsidiaries, company))
 
 
+def record_review(company, reason, phrases, shared_phrases, extract_version):
+    """Upsert a company into the human-review queue (company_review).
+
+    Written when extraction succeeded but nothing matched ('no_match'), or the
+    source text was empty ('no_data'). ``shared_phrases`` explains any phrases
+    downweighted for being owned by several subsidiaries.
+    """
+    _run(
+        'INSERT INTO company_review '
+        '("id", "company", "reason", "phrases", "sharedPhrases", "extractVersion", '
+        '"createdAt", "updatedAt") '
+        'VALUES (%s, %s, %s, %s::jsonb, %s::jsonb, %s, now(), now()) '
+        'ON CONFLICT ("company") DO UPDATE SET '
+        '"reason" = EXCLUDED."reason", "phrases" = EXCLUDED."phrases", '
+        '"sharedPhrases" = EXCLUDED."sharedPhrases", '
+        '"extractVersion" = EXCLUDED."extractVersion", "updatedAt" = now()',
+        ("cr_" + uuid4().hex, company, reason, json.dumps(phrases),
+         json.dumps(shared_phrases), extract_version))
+
+
 def clear_matches(company):
     _run('UPDATE "Contact" SET "subsidiaryMatches" = ARRAY[]::text[], '
          '"subsidiaryMatchedAt" = now() WHERE "company" = %s', (company,))
