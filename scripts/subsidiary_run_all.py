@@ -27,14 +27,24 @@ from app.subsidiary import config, db, handlers, logic  # noqa: E402
 log = logging.getLogger("scripts.run_all")
 
 
+def _current_version():
+    return logic.extract_version(
+        config.LLM_MODEL, handlers.EXTRACT_PROMPT_VERSION,
+        logic.vocabulary_version(db.get_subsidiaries()))
+
+
 def select(args):
     if args.all:
         companies = db.all_company_names()
     else:
-        version = logic.extract_version(
-            config.LLM_MODEL, handlers.EXTRACT_PROMPT_VERSION,
-            logic.vocabulary_version(db.get_subsidiaries()))
-        companies = db.pending_companies(version)
+        companies = db.pending_companies(_current_version())
+    if args.skip_done:
+        version = _current_version()
+        before = len(companies)
+        companies = [c for c in companies
+                     if (db.header(c) or {}).get("extractVersion") != version]
+        print("skip-done: %d already complete, %d to do"
+              % (before - len(companies), len(companies)), flush=True)
     return companies[args.offset:args.offset + args.limit]
 
 
@@ -44,6 +54,8 @@ def main():
                     help="every distinct company, not just pending ones")
     ap.add_argument("--limit", type=int, default=100)
     ap.add_argument("--offset", type=int, default=0)
+    ap.add_argument("--skip-done", action="store_true",
+                    help="skip companies already at the current extractVersion")
     ap.add_argument("--eta-every", type=int, default=25)
     args = ap.parse_args()
 

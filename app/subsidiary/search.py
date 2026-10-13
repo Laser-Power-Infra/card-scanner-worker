@@ -84,6 +84,11 @@ def _response(response, provider):
         raise RateLimited(text, hard=True)
     if response.status_code >= 500:
         raise TransientError("search provider returned %s" % response.status_code)
+    if 400 <= response.status_code < 500:
+        # Any other 4xx (e.g. Tavily's 432 plan/quota) is a hard failure for
+        # this provider/key: cool it down so later searches skip it instead of
+        # paying the failing request's latency on every call.
+        raise RateLimited(response.text[:300], hard=True)
     response.raise_for_status()
     return response.json()
 
@@ -244,7 +249,7 @@ def search(query, domains=None):
                 empty_result = True
                 break
             except RateLimited as exc:
-                if not had_rate_limit:
+                if not exc.hard and not had_rate_limit:
                     had_rate_limit = True
                     log.info("Search key %s rate-limited; retrying once", env_name)
                     continue
@@ -252,7 +257,7 @@ def search(query, domains=None):
                 cooldown = (config.SEARCH_CREDIT_COOLDOWN if exc.hard
                             else config.SEARCH_SOFT_COOLDOWN)
                 _cooldown_until[env_name] = time.time() + cooldown
-                log.warning("Search key %s rate-limited; cooldown=%ss", env_name, cooldown)
+                log.warning("Search key %s unavailable; cooldown=%ss", env_name, cooldown)
                 _count = (_count + 1) % count
                 break
             except (TransientError, requests.RequestException, ValueError) as exc:

@@ -10,6 +10,8 @@ def reset(monkeypatch):
     for key in list(os.environ):
         if key.startswith("SEARCH_"):
             monkeypatch.delenv(key, raising=False)
+    # Pin provider order so the tests do not depend on the developer's .env.
+    monkeypatch.setattr(search.config, "SEARCH_PRIORITY", "tavily,exa,serpapi")
     search._count = 0
     search._cooldown_until.clear()
 
@@ -49,6 +51,29 @@ def test_search_retries_once_after_rate_limit(monkeypatch):
     result = search.search("example company")
     assert result[0]["text"] == "business"
     assert calls == ["tavily", "tavily"]
+
+
+def test_hard_rate_limit_is_not_retried_and_enters_cooldown(monkeypatch):
+    monkeypatch.setenv("SEARCH_TAVILY_API_KEY", "tavily")
+    monkeypatch.setenv("SEARCH_EXA_API_KEY", "exa")
+    calls = []
+
+    def tavily(query, key, domains):
+        calls.append("tavily")
+        raise search.RateLimited("432", hard=True)
+
+    def exa(query, key, domains):
+        calls.append("exa")
+        return [{"title": "ok", "url": "https://example.com", "text": "business"}]
+
+    monkeypatch.setitem(search._ADAPTERS, "tavily", tavily)
+    monkeypatch.setitem(search._ADAPTERS, "exa", exa)
+
+    result = search.search("example company")
+    assert result[0]["text"] == "business"
+    # One failed tavily attempt, no retry, then exa; tavily is cooled down.
+    assert calls == ["tavily", "exa"]
+    assert search._cooldown_until.get("SEARCH_TAVILY_API_KEY", 0) > 0
 
 
 def test_empty_results_try_other_provider_without_marking_failure(monkeypatch):
