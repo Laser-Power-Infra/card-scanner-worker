@@ -10,8 +10,9 @@ def test_vector_cache_merges_per_subsidiary_newest_first(monkeypatch):
         captured["sql"] = sql
         captured["params"] = params
         return [
-            {"scores": {"LASER": 1.0}, "scoreVersions": {"LASER": "v1"}},
-            {"scores": {"LASER": 0.33, "GMD": 0.66},
+            {"keyword": "lt cable", "scores": {"LASER": 1.0},
+             "scoreVersions": {"LASER": "v1"}},
+            {"keyword": "lt cable", "scores": {"LASER": 0.33, "GMD": 0.66},
              "scoreVersions": {"LASER": "v0", "GMD": "v1"}},
         ]
 
@@ -21,15 +22,15 @@ def test_vector_cache_merges_per_subsidiary_newest_first(monkeypatch):
 
     assert out["scores"] == {"LASER": 1.0, "GMD": 0.66}
     assert out["scoreVersions"] == {"LASER": "v1", "GMD": "v1"}
-    # The lookup is indexed on the phrase column, not a full header scan.
-    assert captured["params"] == ("lt cable",)
-    assert '"keyword" = %s' in captured["sql"]
+    # One indexed query for the phrase list, not a full header scan.
+    assert captured["params"] == (["lt cable"],)
+    assert '"keyword" = ANY(%s)' in captured["sql"]
 
 
 def test_vector_cache_parses_json_strings_and_drops_unknown_subsidiaries(monkeypatch):
     monkeypatch.setattr(db, "get_subsidiary_names", lambda: ["LASER"])
     monkeypatch.setattr(db, "_fetchall", lambda sql, params=None: [
-        {"scores": '{"LASER": 0.66, "UNKNOWN": 1.0}',
+        {"keyword": "gate valve", "scores": '{"LASER": 0.66, "UNKNOWN": 1.0}',
          "scoreVersions": '{"LASER": "v1", "UNKNOWN": "v1"}'},
     ])
 
@@ -44,6 +45,25 @@ def test_vector_cache_returns_none_when_empty(monkeypatch):
     monkeypatch.setattr(db, "_fetchall", lambda sql, params=None: [])
     assert db.get_keyword_vector_cache("nothing") is None
     assert db.get_keyword_vector_cache("") is None
+
+
+def test_batch_vector_cache_scores_all_phrases_in_one_call(monkeypatch):
+    monkeypatch.setattr(db, "get_subsidiary_names", lambda: ["LASER"])
+    calls = []
+
+    def fetchall(sql, params=None):
+        calls.append(params)
+        return [
+            {"keyword": "a", "scores": {"LASER": 1.0}, "scoreVersions": {"LASER": "v1"}},
+            {"keyword": "b", "scores": {"LASER": 0.66}, "scoreVersions": {"LASER": "v1"}},
+        ]
+
+    monkeypatch.setattr(db, "_fetchall", fetchall)
+    out = db.get_keyword_vector_caches(["a", "b", "a", ""])
+
+    assert set(out) == {"a", "b"}
+    assert len(calls) == 1
+    assert calls[0] == (["a", "b"],)
 
 
 def test_has_extraction_requires_ok_header_with_phrases(monkeypatch):

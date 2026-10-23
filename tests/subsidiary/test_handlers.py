@@ -54,6 +54,9 @@ class FakeDB:
     def get_keyword_vector_cache(self, phrase):
         return None
 
+    def get_keyword_vector_caches(self, phrases):
+        return {}
+
     def write_vectors(self, company, phrases, vectors, extract_version, score_version_map):
         self.calls.append(("write_vectors", list(phrases)))
 

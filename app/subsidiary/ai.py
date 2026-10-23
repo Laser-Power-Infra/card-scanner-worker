@@ -20,7 +20,7 @@ def _headers():
             "Content-Type": "application/json"}
 
 
-def _call(prompt, schema_name, schema, max_tokens):
+def _call(prompt, schema_name, schema, max_tokens, attempts=2):
     body = {
         "model": config.LLM_MODEL,
         "input": prompt,
@@ -31,19 +31,34 @@ def _call(prompt, schema_name, schema, max_tokens):
     # Omit temperature for models that reject it (config.LLM_TEMPERATURE == "").
     if config.LLM_TEMPERATURE != "":
         body["temperature"] = float(config.LLM_TEMPERATURE)
-    start = time.monotonic()
-    response = requests.post(ENDPOINT, headers=_headers(), json=body, timeout=180)
-    if response.status_code >= 500 or response.status_code == 429:
-        raise RuntimeError("OpenAI transient error %s: %s" % (response.status_code, response.text[:200]))
-    response.raise_for_status()
-    result = response.json()
-    text = "".join(block.get("text", "")
-                   for item in result.get("output", []) if item.get("type") == "message"
-                   for block in item.get("content", []) if block.get("type") == "output_text")
-    if not text:
-        raise ValueError("OpenAI returned no structured output")
-    log.info("OpenAI %s completed in %.2fs", schema_name, time.monotonic() - start)
-    return json.loads(text)
+    last_error = None
+    for attempt in range(1, attempts + 1):
+        start = time.monotonic()
+        try:
+            response = requests.post(ENDPOINT, headers=_headers(), json=body, timeout=180)
+            if response.status_code >= 500 or response.status_code == 429:
+                raise RuntimeError("OpenAI transient error %s: %s"
+                                   % (response.status_code, response.text[:200]))
+            response.raise_for_status()
+            result = response.json()
+            text = "".join(block.get("text", "")
+                           for item in result.get("output", []) if item.get("type") == "message"
+                           for block in item.get("content", []) if block.get("type") == "output_text")
+            if not text:
+                raise ValueError("OpenAI returned no structured output")
+            value = json.loads(text)
+        except (RuntimeError, ValueError, json.JSONDecodeError) as exc:
+            # Empty/truncated structured output and transient 5xx/429 are retried
+            # once; a long batch should not lose a company to a one-off blip.
+            last_error = exc
+            if attempt < attempts:
+                log.warning("OpenAI %s attempt %d failed (%s); retrying",
+                            schema_name, attempt, exc)
+                continue
+            raise
+        log.info("OpenAI %s completed in %.2fs", schema_name, time.monotonic() - start)
+        return value
+    raise last_error  # unreachable
 
 
 def _vocabulary_block(subsidiaries):

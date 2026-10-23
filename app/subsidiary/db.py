@@ -74,21 +74,24 @@ def has_extraction(company):
     return bool(sources.get("phrases"))
 
 
-def get_keyword_vector_cache(phrase):
-    """Return the newest merged vector for a phrase across company rows.
+def get_keyword_vector_caches(phrases):
+    """Newest merged vector for each phrase, fetched in ONE query.
 
-    Reads the indexed per-phrase rows (``keyword = <phrase>``) rather than
-    scanning every company header, so cross-company reuse stays O(matches)
-    instead of O(companies).
+    Reads the indexed per-phrase rows (``keyword = ANY(...)``) newest-first so
+    a phrase already scored by any company is reused instead of re-sent to the
+    LLM, without paying one round trip per phrase.
     """
-    if not phrase:
-        return None
+    keys = [p for p in dict.fromkeys(phrases) if p]
+    if not keys:
+        return {}
     rows = _fetchall(
-        'SELECT "scores", "scoreVersions" FROM company_keyword_score '
-        'WHERE "keyword" = %s ORDER BY "fetchedAt" DESC', (phrase,))
+        'SELECT "keyword", "scores", "scoreVersions" FROM company_keyword_score '
+        'WHERE "keyword" = ANY(%s) ORDER BY "fetchedAt" DESC', (keys,))
     configured_names = set(get_subsidiary_names())
-    merged = {"scores": {}, "scoreVersions": {}}
+    merged = {}
     for row in rows:
+        phrase = row["keyword"]
+        bucket = merged.setdefault(phrase, {"scores": {}, "scoreVersions": {}})
         scores = row.get("scores") or {}
         versions = row.get("scoreVersions") or {}
         if isinstance(scores, str):
@@ -96,11 +99,16 @@ def get_keyword_vector_cache(phrase):
         if isinstance(versions, str):
             versions = json.loads(versions)
         for name, score in scores.items():
-            if name in configured_names and name not in merged["scores"]:
-                merged["scores"][name] = score
+            if name in configured_names and name not in bucket["scores"]:
+                bucket["scores"][name] = score
                 if name in versions:
-                    merged["scoreVersions"][name] = versions[name]
-    return merged if merged["scores"] else None
+                    bucket["scoreVersions"][name] = versions[name]
+    return {p: v for p, v in merged.items() if v["scores"]}
+
+
+def get_keyword_vector_cache(phrase):
+    """Newest merged vector for a single phrase (see the batch helper)."""
+    return get_keyword_vector_caches([phrase]).get(phrase)
 
 
 def all_company_names():
@@ -161,34 +169,61 @@ def upsert_header(company, status, extract_version, sources):
          extract_version, json.dumps(sources)))
 
 
-def save_phrase(company, phrase, scores, extract_version, score_versions):
-    _run(
+def _executemany(sql, rows):
+    if not rows:
+        return
+    try:
+        with _conn().cursor() as cur:
+            cur.executemany(sql, rows)
+    except psycopg.OperationalError:
+        shared_db.reset_conn()
+        with _conn().cursor() as cur:
+            cur.executemany(sql, rows)
+
+
+def save_phrases(records):
+    """Insert/update per-phrase vector rows in one round trip.
+
+    records: iterable of (company, phrase, scores_json, extract_version,
+    versions_json).
+    """
+    rows = [("ckp_" + uuid4().hex, company, phrase, scores_json, extract_version,
+             versions_json)
+            for company, phrase, scores_json, extract_version, versions_json in records]
+    _executemany(
         'INSERT INTO company_keyword_score '
         '("id", "company", "keyword", "scores", "extractVersion", "scoreVersions", "fetchedAt") '
         'VALUES (%s, %s, %s, %s::jsonb, %s, %s::jsonb, now()) '
         'ON CONFLICT ("company", "keyword") DO UPDATE SET '
         '"scores" = EXCLUDED."scores", "extractVersion" = EXCLUDED."extractVersion", '
         '"scoreVersions" = EXCLUDED."scoreVersions", "fetchedAt" = now()',
-        ("ckp_" + uuid4().hex, company, phrase,
-         json.dumps(scores), extract_version, json.dumps(score_versions)))
+        rows)
+
+
+def save_phrase(company, phrase, scores, extract_version, score_versions):
+    save_phrases([(company, phrase, json.dumps(scores), extract_version,
+                   json.dumps(score_versions))])
 
 
 def write_vectors(company, phrases, vectors, extract_version, score_versions):
     """Store phrase vectors in the header's reusable JSON cache and company rows.
 
     This keeps the approved two-table schema while ensuring repeated phrases
-    across company strings reuse one persisted vector.
+    across company strings reuse one persisted vector. Both the cross-company
+    cache read and the per-phrase writes are batched into single round trips.
     """
     sources = get_company_sources(company) or {}
     cache = sources.get("keywordVectors", {})
     configured_names = set(get_subsidiary_names())
-    for phrase in phrases:
-        vector = vectors.get(phrase)
-        if not vector:
-            continue
+    wanted = [p for p in phrases if vectors.get(p)]
+    shared = get_keyword_vector_caches(
+        [p for p in wanted if p not in cache])
+    records = []
+    for phrase in wanted:
+        vector = vectors[phrase]
         versions = {name: score_versions[name] for name in vector
                     if name in score_versions and name in configured_names}
-        prior = get_keyword_vector_cache(phrase) or cache.get(phrase) or {}
+        prior = shared.get(phrase) or cache.get(phrase) or {}
         merged_scores = dict(prior.get("scores") or {})
         merged_versions = dict(prior.get("scoreVersions") or {})
         filtered_vector = {name: value for name, value in vector.items()
@@ -197,9 +232,10 @@ def write_vectors(company, phrases, vectors, extract_version, score_versions):
         merged_versions.update({name: version for name, version in versions.items()
                                 if name in configured_names})
         cache[phrase] = {"scores": merged_scores, "scoreVersions": merged_versions}
-        save_phrase(company, phrase, filtered_vector, extract_version,
-                    {name: version for name, version in versions.items()
-                     if name in configured_names})
+        records.append((company, phrase, json.dumps(filtered_vector), extract_version,
+                        json.dumps({name: version for name, version in versions.items()
+                                    if name in configured_names})))
+    save_phrases(records)
     sources["keywordVectors"] = cache
     upsert_header(company, "OK", extract_version, sources)
 

@@ -1,5 +1,49 @@
 from app.subsidiary import ai
 
+import pytest
+
+
+class _FakeResponse:
+    def __init__(self, payload, status=200):
+        self._payload = payload
+        self.status_code = status
+        self.text = ""
+
+    def raise_for_status(self):
+        pass
+
+    def json(self):
+        return self._payload
+
+
+def _message(text):
+    return {"output": [{"type": "message",
+                        "content": [{"type": "output_text", "text": text}]}]}
+
+
+def test_call_retries_once_on_empty_output(monkeypatch):
+    calls = {"n": 0}
+
+    def post(*args, **kwargs):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            return _FakeResponse({"output": []})            # empty -> ValueError
+        return _FakeResponse(_message('{"ok": true}'))
+
+    monkeypatch.setattr(ai, "_headers", lambda: {})
+    monkeypatch.setattr(ai.requests, "post", post)
+
+    assert ai._call("p", "s", {"type": "object"}, 10) == {"ok": True}
+    assert calls["n"] == 2
+
+
+def test_call_raises_after_retries_exhausted(monkeypatch):
+    monkeypatch.setattr(ai, "_headers", lambda: {})
+    monkeypatch.setattr(ai.requests, "post",
+                        lambda *a, **k: _FakeResponse({"output": []}))
+    with pytest.raises(ValueError):
+        ai._call("p", "s", {"type": "object"}, 10)
+
 
 def test_score_phrases_batches_all_phrases_into_one_openai_call(monkeypatch):
     calls = []

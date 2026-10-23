@@ -76,10 +76,12 @@ def aggregate_company(company, *, dry_run=False):
         return "ok", {"company": company, "matches": [], "status": "NO_DATA"}
     subsidiaries = db.get_subsidiaries()
     score_version_map = logic.score_versions(config.LLM_MODEL, SCORE_PROMPT_VERSION, subsidiaries)
+    header_vectors = source_data.get("keywordVectors") or {}
+    shared_cache = db.get_keyword_vector_caches(
+        [p for p in phrases if p not in header_vectors])
     vectors = {}
     for phrase in phrases:
-        cached = ((source_data.get("keywordVectors") or {}).get(phrase))
-        candidate = cached or db.get_keyword_vector_cache(phrase)
+        candidate = header_vectors.get(phrase) or shared_cache.get(phrase)
         if candidate:
             vectors[phrase] = dict(logic.version_valid_scores(candidate, score_version_map))
     matches = logic.aggregate(phrases, vectors, subsidiaries)
@@ -179,13 +181,15 @@ def process_company(payload, *, dry_run=False):
     vectors = {}
     stale_phrases = []
     header_hits = shared_hits = 0
+    shared_cache = db.get_keyword_vector_caches(
+        [p for p in phrases if p not in header_vectors])
     for phrase in phrases:
         cached = header_vectors.get(phrase)
         if cached:
             header_hits += 1
             vectors[phrase] = logic.version_valid_scores(cached, score_version_map)
         else:
-            shared = db.get_keyword_vector_cache(phrase)
+            shared = shared_cache.get(phrase)
             if shared:
                 shared_hits += 1
                 vectors.setdefault(phrase, {}).update(
