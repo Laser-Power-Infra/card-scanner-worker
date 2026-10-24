@@ -4,3 +4,6 @@ __pycache__/
 .env
 .pytest_cache/
 .receiver.pid
+data/geoapify_usage.json
+data/geoapify_usage.json.lock
+data/geoapify_usage.json.tmp

@@ -97,12 +97,8 @@ def _research(contact_id, snap):
     data, api_ok = ai.enrich_person(name, desig, company,
                                     worker="workers.combined(research)")
 
-    # The AI's FB/TW/IG lines are NOT pre-verified against the person's name —
-    # a company page can slip through. Drop any such line that doesn't match.
-    data["other_web_profiles"] = common.keep_personal_only(
-        data.get("other_web_profiles", ""), name)
-
-    # LinkedIn EXACT-match: keep the AI link only when its slug contains the name.
+    # Trust the model's social URLs (no HTTP verification, per design).
+    # LinkedIn keeps its exact-name gate to avoid same-name collisions.
     linkedin_url = data.get("linkedin_url", "")
     if common.li_score(linkedin_url, name) < 1:
         linkedin_url = ""
@@ -124,11 +120,11 @@ def _research(contact_id, snap):
             continue
         label = m.group(1).strip().lower()
         url = m.group(2).strip()
-        if label in ("facebook",) and common.path_score(url, name) >= 1:
+        if label in ("facebook",):
             plat_urls["facebook_url"] = url
-        elif label in ("twitter", "x") and common.path_score(url, name) >= 1:
+        elif label in ("twitter", "x"):
             plat_urls["twitter_url"] = url
-        elif label == "instagram" and common.path_score(url, name) >= 1:
+        elif label == "instagram":
             plat_urls["instagram_url"] = url
 
     # Append a WhatsApp wa.me line to other_profiles when a mobile exists.

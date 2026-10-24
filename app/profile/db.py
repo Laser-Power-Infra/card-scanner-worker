@@ -32,6 +32,8 @@ _WRITABLE = {
     "facebook_url", "twitter_url", "instagram_url", "other_profiles",
     "company_details", "company_core_business", "official_site",
     "sources", "location", "career_background", "summary",
+    "address_line1", "address_line2", "city", "state",
+    "postal_code", "country",
 }
 
 def get_conn():
@@ -201,3 +203,78 @@ def set_contact_job_title(contact_id, title):
         return
     _run('UPDATE "Contact" SET "jobTitle" = %s WHERE "id" = %s',
          (str(title)[:120], contact_id))
+
+
+def address_schema_ok():
+    """True if the enrichment address columns exist."""
+    try:
+        row = _fetchone(
+            "SELECT 1 FROM information_schema.columns "
+            "WHERE table_name = 'enrichment' AND column_name = 'address_verified_at'")
+        return bool(row)
+    except Exception:
+        return False
+
+
+def location_cache_schema_ok():
+    """True if LocationCache has the extended columns."""
+    try:
+        row = _fetchone(
+            "SELECT 1 FROM information_schema.columns "
+            "WHERE table_name = 'LocationCache' AND column_name = 'normalizedQuery'")
+        return bool(row)
+    except Exception:
+        return False
+
+
+def update_address(contact_id, fields, verified_at=None):
+    """Write verified address fields. Does not touch status or attempts."""
+    merge_enrichment(contact_id, fields or {})
+    if verified_at is not None:
+        _run("UPDATE enrichment SET address_verified_at = %s, updated_at = now() "
+             "WHERE contact_id = %s", (verified_at, contact_id))
+
+
+def mark_address_failed(contact_id):
+    """Increment the per-contact address attempt counter."""
+    upsert_enrichment(contact_id)
+    _run("UPDATE enrichment SET address_attempts = COALESCE(address_attempts, 0) + 1, "
+         "updated_at = now() WHERE contact_id = %s", (contact_id,))
+
+
+def set_company_location_if_empty(contact_id, value):
+    if not value:
+        return
+    _run('UPDATE "Contact" SET "companyLocation" = %s '
+         'WHERE "id" = %s AND (coalesce(trim("companyLocation"), \'\') = \'\')',
+         (str(value)[:200], contact_id))
+
+
+def get_location_cache(normalized_query):
+    if not normalized_query:
+        return None
+    try:
+        return _fetchone(
+            'SELECT "placeId", latitude, longitude, "formattedAddress", '
+            'country, state, "expiresAt", resolved '
+            'FROM "LocationCache" WHERE "normalizedQuery" = %s', (normalized_query,))
+    except Exception:
+        return None
+
+
+def upsert_location_cache(normalized_query, query, latitude, longitude, place_id,
+                         formatted_address, country, state, expires_at):
+    import uuid
+    _run(
+        'INSERT INTO "LocationCache" '
+        '(id, query, "normalizedQuery", latitude, longitude, "placeId", '
+        '"formattedAddress", country, state, resolved, "expiresAt", "createdAt", "updatedAt") '
+        'VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, true, %s, now(), now()) '
+        'ON CONFLICT ("normalizedQuery") DO UPDATE SET '
+        'query = EXCLUDED.query, latitude = EXCLUDED.latitude, '
+        'longitude = EXCLUDED.longitude, "placeId" = EXCLUDED."placeId", '
+        '"formattedAddress" = EXCLUDED."formattedAddress", country = EXCLUDED.country, '
+        'state = EXCLUDED.state, resolved = true, "expiresAt" = EXCLUDED."expiresAt", '
+        '"updatedAt" = now()',
+        (str(uuid.uuid4()), query, normalized_query, latitude, longitude,
+         place_id, formatted_address, country, state, expires_at))

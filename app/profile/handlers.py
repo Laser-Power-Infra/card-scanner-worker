@@ -9,11 +9,11 @@ It also adapts the publisher's CardData payload into the
 """
 import logging
 
-from .workers import combined
+from .workers import address, combined
 
 log = logging.getLogger("card-desk.handlers")
 
-# Every tag is handled by the one combined worker.
+# Tags handled by the combined worker. "address" is handled separately.
 TAGS = ("research", "linkedin", "whatsapp", "instagram", "facebook", "twitter")
 
 
@@ -29,6 +29,8 @@ def snapshot_from_contact(contact):
         "otherSocials": contact.get("otherSocials") or [],
         "mobileNumbers": contact.get("mobileNumbers") or [],
         "telephoneNumbers": contact.get("telephoneNumbers") or [],
+        "address": contact.get("address"),
+        "companyLocation": contact.get("companyLocation"),
     }
 
 
@@ -44,10 +46,17 @@ def handle_combined(payload):
     return combined.run(_task_from_payload(payload))
 
 
-DISPATCH = {tag: handle_combined for tag in TAGS}
+def handle_address(payload):
+    return address.run(_task_from_payload(payload))
+
+
+DISPATCH = {tag: handle_combined for tag in TAGS if tag != "address"}
+DISPATCH["address"] = handle_address
 
 # Human-facing worker name per tag, for console debugging of the assignment.
-TAG_WORKERS = {tag: "workers.combined(%s)" % tag for tag in TAGS}
+TAG_WORKERS = {tag: "workers.combined(%s)" % tag for tag in TAGS
+               if tag != "address"}
+TAG_WORKERS["address"] = "workers.address"
 
 
 def dispatch(tag, payload):

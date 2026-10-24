@@ -41,3 +41,13 @@ PHOTO_POLL_INTERVAL = float(os.environ.get("PHOTO_POLL_INTERVAL", "5"))
 SCRAPE_TIMEOUT = int(os.environ.get("SCRAPE_TIMEOUT", "8"))
 USER_AGENT = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
               "CardDesk enrichment worker")
+
+# Address pass (Geoapify geocoding)
+GEOAPIFY_API_KEY = os.environ.get("GEOAPIFY_API_KEY", "")
+GEOAPIFY_DAILY_CAP = int(os.environ.get("GEOAPIFY_DAILY_CAP", "3000"))
+GEOAPIFY_MONTHLY_CAP = int(os.environ.get("GEOAPIFY_MONTHLY_CAP", "70000"))
+GEOAPIFY_USAGE_FILE = os.environ.get("GEOAPIFY_USAGE_FILE",
+                                     "data/geoapify_usage.json")
+GEOAPIFY_TIMEOUT = int(os.environ.get("GEOAPIFY_TIMEOUT", "20"))
+GEOAPIFY_MAX_ATTEMPTS = int(os.environ.get("GEOAPIFY_MAX_ATTEMPTS", "3"))
+ADDRESS_MODEL = os.environ.get("ADDRESS_MODEL", "")
