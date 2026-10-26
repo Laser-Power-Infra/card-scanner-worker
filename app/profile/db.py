@@ -10,7 +10,7 @@ import time
 import psycopg
 
 from ..shared import db as shared_db
-from . import config
+from . import config, locations
 
 log = logging.getLogger("card-desk.db")
 
@@ -65,6 +65,19 @@ def _fetchone(sql, params=None):
         with get_conn().cursor() as cur:
             cur.execute(sql, params)
             return cur.fetchone()
+
+
+def _fetchall(sql, params=None):
+    try:
+        with get_conn().cursor() as cur:
+            cur.execute(sql, params)
+            return cur.fetchall()
+    except psycopg.OperationalError:
+        log.warning("DB connection dropped; reconnecting and retrying")
+        shared_db.reset_conn()
+        with get_conn().cursor() as cur:
+            cur.execute(sql, params)
+            return cur.fetchall()
 
 
 def get_contact(contact_id):
@@ -225,6 +238,102 @@ def location_cache_schema_ok():
         return bool(row)
     except Exception:
         return False
+
+
+_LOCATION_WRITABLE = {
+    "address_line1", "address_line2", "city", "state", "postal_code",
+    "country", "latitude", "longitude", "source_url", "source_type",
+    "precision", "status", "is_primary", "evidence_saved", "found_count",
+}
+
+
+def company_location_schema_ok():
+    """True if the Phase 2 CompanyLocation table has been migrated."""
+    try:
+        row = _fetchone(
+            "SELECT 1 FROM information_schema.tables "
+            "WHERE table_name = 'CompanyLocation'")
+        return bool(row)
+    except Exception:
+        return False
+
+
+def get_company_locations(contact_id):
+    return _fetchall(
+        'SELECT * FROM "CompanyLocation" WHERE contact_id = %s '
+        'ORDER BY found_at, id', (contact_id,))
+
+
+def insert_company_location(contact_id, fields):
+    import uuid
+    payload = {"id": str(uuid.uuid4()), "contact_id": contact_id}
+    for key, value in (fields or {}).items():
+        if key in _LOCATION_WRITABLE:
+            payload[key] = value
+    columns = list(payload)
+    _run(
+        'INSERT INTO "CompanyLocation" (%s) VALUES (%s)' % (
+            ", ".join('"%s"' % column for column in columns),
+            ", ".join(["%s"] * len(columns))),
+        [payload[column] for column in columns])
+
+
+def update_company_location(location_id, fields):
+    sets, values = [], []
+    for key, value in (fields or {}).items():
+        if key not in _LOCATION_WRITABLE:
+            continue
+        sets.append('"%s" = %%s' % key)
+        values.append(value)
+    if not sets:
+        return
+    values.append(location_id)
+    _run('UPDATE "CompanyLocation" SET %s WHERE id = %%s'
+         % ", ".join(sets), values)
+
+
+def set_primary_location(contact_id, location, verified_at=None):
+    """Flip the primary flag and mirror that location into enrichment."""
+    _run('UPDATE "CompanyLocation" SET is_primary = (id = %s) '
+         'WHERE contact_id = %s', (location["id"], contact_id))
+
+    if location.get("status") != "VERIFIED":
+        verified_at = None
+    elif verified_at is None:
+        from datetime import datetime, timezone
+        verified_at = datetime.now(timezone.utc).replace(tzinfo=None)
+
+    upsert_enrichment(contact_id)
+    _run(
+        'UPDATE enrichment SET address_line1 = %s, address_line2 = %s, '
+        'city = %s, state = %s, postal_code = %s, country = %s, '
+        'address_verified_at = %s, updated_at = now() WHERE contact_id = %s',
+        (location.get("address_line1") or "",
+         location.get("address_line2") or "",
+         location.get("city") or "",
+         location.get("state") or "",
+         location.get("postal_code") or "",
+         location.get("country") or "",
+         verified_at, contact_id))
+
+
+def merge_company_location(contact_id, candidate, company_location=None):
+    """Add a new company location or merge a repeat sighting, then re-run the
+    primary rule. Returns the primary row."""
+    rows = get_company_locations(contact_id)
+    match = next((row for row in rows
+                  if locations.same_location(row, candidate)), None)
+    if match:
+        update_company_location(match["id"],
+                                locations.merge_details(match, candidate))
+    else:
+        insert_company_location(contact_id, candidate)
+
+    primary = locations.choose_primary(get_company_locations(contact_id),
+                                       company_location)
+    if primary:
+        set_primary_location(contact_id, primary)
+    return primary
 
 
 def update_address(contact_id, fields, verified_at=None):

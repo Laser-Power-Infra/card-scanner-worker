@@ -1,12 +1,13 @@
 """Address pass: verify a company's postal address via Geoapify geocoding."""
 import logging
 import re
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 import requests
 
 from ...shared import search as search_mod
-from .. import address_ai, budget, config, db, geo
+from .. import (address_ai, address_attempt, budget, config, db, geo,
+                locations)
 
 log = logging.getLogger("card-desk.worker.address")
 
@@ -40,7 +41,9 @@ def _fetch_text(url):
         return ""
 
 
-def _retrieve(company, company_location, website, official_site):
+def _retrieve(company, company_location, website, official_site, notes=None):
+    """Fetch candidate pages. Returns [{title, url, text}], best effort."""
+    notes = notes if notes is not None else []
     pages = []
     domains = []
     for base in (website, official_site):
@@ -54,6 +57,7 @@ def _retrieve(company, company_location, website, official_site):
             try:
                 pages.extend(search_mod._scrape_domain(host))
             except Exception as exc:  # noqa: BLE001 - best effort
+                notes.append("direct scrape failed for %s: %s" % (host, exc))
                 log.info("direct scrape failed for %s: %s", host, exc)
         root = (base if "://" in base else "https://" + base).strip()
         if " " in root:
@@ -72,8 +76,11 @@ def _retrieve(company, company_location, website, official_site):
                     query, domains=domains if scoped else None))
                 break
             except Exception as exc:  # noqa: BLE001
+                notes.append("search failed for %s (scoped=%s): %s"
+                             % (company, scoped, exc))
                 log.info("search failed for %s (scoped=%s): %s", company, scoped, exc)
-    # de-duplicate by url, keep text
+    # de-duplicate by url, keep the full text (the attempt record only needs a
+    # snippet; the LLM input is truncated in _pages_for_ai).
     seen = set()
     out = []
     for r in pages:
@@ -85,8 +92,27 @@ def _retrieve(company, company_location, website, official_site):
         if key in seen:
             continue
         seen.add(key)
-        out.append("%s\n%s" % (url, text[:12000]))
+        out.append({"title": (r or {}).get("title", ""), "url": url, "text": text})
     return out
+
+
+def _pages_for_ai(pages):
+    return ["%s\n%s" % (p.get("url", ""), p.get("text", "")[:12000])
+            for p in pages]
+
+
+def _save_location(contact_id, fields, extracted, website, official_site,
+                   company_location, status="VERIFIED"):
+    """Add/merge the geocoded result as a CompanyLocation and return the primary."""
+    candidate = locations.build_location(
+        fields,
+        source_url=(extracted or {}).get("evidence_url") or "",
+        website=website, official_site=official_site, status=status)
+    primary = db.merge_company_location(contact_id, candidate, company_location)
+    if primary and not company_location and primary.get("city"):
+        db.set_company_location_if_empty(
+            contact_id, "%s, %s" % (primary["city"], primary.get("state") or ""))
+    return primary
 
 
 def _load_contact(contact_id, snap):
@@ -112,79 +138,128 @@ def run(task):
     contact_id = task["contactId"]
     snap = task.get("snapshot") or {}
 
-    if not db.address_schema_ok() or not db.location_cache_schema_ok():
-        raise RuntimeError("address schema missing; apply the Prisma migration first")
+    attempt = address_attempt.start(contact_id)
 
-    company, company_location, website, official_site = _load_contact(contact_id, snap)
-    if not company:
-        db.mark_address_failed(contact_id)
-        log.warning("address: no company for contact %s", contact_id)
-        return {"ok": False, "site": "address", "reason": "no_company"}
+    def finish(result, outcome, reason, *, mark_failed=False, **kwargs):
+        # Log before the DB side effect so a DB error cannot hide the real
+        # reason; any exception still propagates to the queue handler.
+        address_attempt.finish(attempt, outcome, reason, **kwargs)
+        if mark_failed:
+            db.mark_address_failed(contact_id)
+        return result
 
-    pages = _retrieve(company, company_location, website, official_site)
-    if not pages:
-        db.mark_address_failed(contact_id)
-        log.info("address: no pages for %s", company)
-        return {"ok": False, "site": "address", "reason": "no_pages"}
-
-    extracted = address_ai.extract_company_address(company, company_location, pages)
-    if not extracted or not all(extracted.get(k) for k in ("city", "state", "country")):
-        db.mark_address_failed(contact_id)
-        log.info("address: incomplete extraction for %s", company)
-        return {"ok": False, "site": "address", "reason": "incomplete_extraction",
-                "data": extracted}
-
-    normalized = _normalize_address(extracted)
-    cached = db.get_location_cache(normalized)
-    now = datetime.now(timezone.utc).replace(tzinfo=None)
-    if cached and cached.get("expiresAt") and cached["expiresAt"] > now and cached.get("resolved"):
-        fields = {k: extracted[k] for k in
-                  ("address_line1", "address_line2", "city", "state",
-                   "postal_code", "country")}
-        db.update_address(contact_id, fields, verified_at=now)
-        if not company_location:
-            db.set_company_location_if_empty(contact_id,
-                                            "%s, %s" % (extracted["city"], extracted["state"]))
-        log.info("address: cache hit for %s", company)
-        return {"ok": True, "site": "address", "reason": "cache_hit", **fields}
-
-    if not budget.reserve():
-        log.error("address: monthly geocode cap reached; stopping")
-        return {"ok": False, "site": "address", "reason": "budget_exhausted"}
-
-    addr = ", ".join(x for x in (extracted["address_line1"], extracted["address_line2"],
-                                 extracted["city"], extracted["state"],
-                                 extracted["postal_code"], extracted["country"]) if x)
     try:
-        result = geo.geocode(addr)
-    except geo.GeoRateLimit as exc:
-        db.mark_address_failed(contact_id)
-        log.warning("address: rate limit for %s: %s", company, exc)
-        return {"ok": False, "site": "address", "reason": "rate_limit"}
-    except Exception as exc:  # noqa: BLE001
-        db.mark_address_failed(contact_id)
-        log.warning("address: geocode error for %s: %s", company, exc)
-        return {"ok": False, "site": "address", "reason": "geocode_error",
-                "error": str(exc)}
+        if not (db.address_schema_ok() and db.location_cache_schema_ok()
+                and db.company_location_schema_ok()):
+            finish({"ok": False, "site": "address", "reason": "schema_missing"},
+                   "FAIL", "schema_missing")
+            raise RuntimeError("address schema missing; apply the Prisma migration first")
 
-    ok, reason = geo.accept(result, company_location, extracted)
-    if not ok:
-        db.mark_address_failed(contact_id)
-        log.info("address: rejected (%s) for %s", reason, company)
-        return {"ok": False, "site": "address", "reason": reason}
+        company, company_location, website, official_site = _load_contact(
+            contact_id, snap)
+        attempt["company"] = company
+        attempt["companyLocation"] = company_location
+        if not company:
+            log.warning("address: no company for contact %s", contact_id)
+            return finish({"ok": False, "site": "address", "reason": "no_company"},
+                          "FAIL", "no_company", mark_failed=True)
 
-    fields = geo.extract_fields(result)
-    cache_fields = {k: fields[k] for k in ("address_line1", "address_line2", "city",
-                                           "state", "postal_code", "country")}
-    db.update_address(contact_id, cache_fields, verified_at=now)
-    if not company_location:
-        db.set_company_location_if_empty(contact_id,
-                                        "%s, %s" % (fields["city"], fields["state"]))
-    from datetime import timedelta
-    expires = now + timedelta(days=30)
-    db.upsert_location_cache(
-        normalized, addr, fields["latitude"], fields["longitude"],
-        fields["place_id"], fields["formatted_address"], fields["country"],
-        fields["state"], expires)
-    log.info("address: verified for %s -> %s", company, fields["city"])
-    return {"ok": True, "site": "address", "reason": "verified", **cache_fields}
+        pages = _retrieve(company, company_location, website, official_site,
+                          notes=attempt["notes"])
+        attempt["pages"] = [address_attempt.page(p.get("url", ""), p.get("text", ""))
+                            for p in pages]
+        if not pages:
+            log.info("address: no pages for %s", company)
+            return finish({"ok": False, "site": "address", "reason": "no_pages"},
+                          "FAIL", "no_pages", mark_failed=True)
+
+        extracted = address_ai.extract_company_address(
+            company, company_location, _pages_for_ai(pages))
+        attempt["extracted"] = extracted
+        if not extracted or not all(extracted.get(k) for k in ("city", "state", "country")):
+            log.info("address: incomplete extraction for %s", company)
+            return finish({"ok": False, "site": "address",
+                           "reason": "incomplete_extraction", "data": extracted},
+                          "FAIL", "incomplete_extraction", mark_failed=True)
+
+        normalized = _normalize_address(extracted)
+        cached = db.get_location_cache(normalized)
+        now = datetime.now(timezone.utc).replace(tzinfo=None)
+        if cached and cached.get("expiresAt") and cached["expiresAt"] > now and cached.get("resolved"):
+            fields = {k: extracted[k] for k in
+                      ("address_line1", "address_line2", "city", "state",
+                       "postal_code", "country")}
+            cached_fields = dict(fields, latitude=cached.get("latitude"),
+                                 longitude=cached.get("longitude"))
+            primary = _save_location(
+                contact_id, cached_fields, extracted, website, official_site,
+                company_location)
+            address_attempt.note(attempt, "cached geocode result; checks skipped")
+            attempt["map"] = {
+                "formatted": cached.get("formattedAddress") or "",
+                "lat": cached.get("latitude"),
+                "lon": cached.get("longitude"),
+                "resultType": "cached",
+                "matchType": "cache",
+                "confidence": None,
+                "placeId": cached.get("placeId") or "",
+                "postcode": fields.get("postal_code") or "",
+                "street": fields.get("address_line1") or "",
+            }
+            attempt["notes"].append("primary location: %s" % (
+                (primary or {}).get("id") or "-"))
+            log.info("address: cache hit for %s", company)
+            return finish({"ok": True, "site": "address", "reason": "cache_hit",
+                           **fields}, "PASS", "cache_hit")
+
+        if not budget.reserve():
+            log.error("address: monthly geocode cap reached; stopping")
+            return finish({"ok": False, "site": "address",
+                           "reason": "budget_exhausted"},
+                          "FAIL", "budget_exhausted")
+
+        addr = ", ".join(x for x in (extracted["address_line1"], extracted["address_line2"],
+                                     extracted["city"], extracted["state"],
+                                     extracted["postal_code"], extracted["country"]) if x)
+        try:
+            result = geo.geocode(addr)
+        except geo.GeoRateLimit as exc:
+            log.warning("address: rate limit for %s: %s", company, exc)
+            return finish({"ok": False, "site": "address", "reason": "rate_limit"},
+                          "FAIL", "rate_limit", mark_failed=True,
+                          extra_notes=[str(exc)])
+        except Exception as exc:  # noqa: BLE001
+            log.warning("address: geocode error for %s: %s", company, exc)
+            return finish({"ok": False, "site": "address", "reason": "geocode_error",
+                           "error": str(exc)},
+                          "FAIL", "geocode_error", mark_failed=True,
+                          extra_notes=["%s: %s" % (type(exc).__name__, exc)])
+
+        checks = geo.check_all(result, company_location, extracted)
+        attempt["checks"] = checks
+        attempt["map"] = geo.result_summary(result)
+        ok, reason = geo.decide(checks)
+        if not ok:
+            log.info("address: rejected (%s) for %s", reason, company)
+            return finish({"ok": False, "site": "address", "reason": reason},
+                          "FAIL", reason, mark_failed=True)
+
+        fields = geo.extract_fields(result)
+        cache_fields = {k: fields[k] for k in ("address_line1", "address_line2", "city",
+                                               "state", "postal_code", "country")}
+        primary = _save_location(contact_id, fields, extracted, website,
+                                 official_site, company_location)
+        attempt["notes"].append("primary location: %s" % (
+            (primary or {}).get("id") or "-"))
+        expires = now + timedelta(days=30)
+        db.upsert_location_cache(
+            normalized, addr, fields["latitude"], fields["longitude"],
+            fields["place_id"], fields["formatted_address"], fields["country"],
+            fields["state"], expires)
+        log.info("address: verified for %s -> %s", company, fields["city"])
+        return finish({"ok": True, "site": "address", "reason": "verified",
+                       **cache_fields}, "PASS", "verified")
+    except Exception as exc:  # noqa: BLE001 - record then re-raise
+        address_attempt.note(attempt, "%s: %s" % (type(exc).__name__, exc))
+        address_attempt.finish(attempt, "FAIL", "unhandled_exception")
+        raise

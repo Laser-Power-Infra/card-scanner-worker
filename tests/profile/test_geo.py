@@ -98,6 +98,46 @@ def test_accept_expected_match_passes():
     assert reason == "ok"
 
 
+def test_check_all_reports_every_failure():
+    # Deliberately mismatched geocode result vs extracted address: the point of
+    # the test is that all four disagreements are reported, not just the first.
+    mismatched = _result(postcode="411002", city="Mumbai", street="FC Road")
+    expected = {"postal_code": "411001", "city": "Pune",
+                "address_line1": "407 Raheja Centre"}
+
+    checks = geo.check_all(mismatched, "Karnataka", expected)
+    failed = {item["name"] for item in checks if not item["passed"]}
+    assert failed == {"postcode", "city", "street", "state"}
+    assert geo.decide(checks) == (False, "postcode_mismatch")
+    assert geo.accept(mismatched, "Karnataka", expected) == (
+        False, "postcode_mismatch")
+
+
+def test_check_all_passes_clean_result():
+    checks = geo.check_all(_result(), "Maharashtra")
+    assert checks
+    assert all(item["passed"] for item in checks)
+    assert geo.decide(checks) == (True, "ok")
+
+
+def test_check_all_records_no_results():
+    checks = geo.check_all(None, None)
+    assert [item["name"] for item in checks] == ["no_results"]
+    assert geo.decide(checks) == (False, "no_results")
+
+
+def test_result_summary_flattens():
+    base = _result()
+    summary = geo.result_summary(base)
+    assert summary["formatted"] == base["formatted"]
+    assert summary["lat"] == base["lat"]
+    assert summary["lon"] == base["lon"]
+    assert summary["resultType"] == base["result_type"]
+    assert summary["matchType"] == base["rank"]["match_type"]
+    assert summary["confidence"] == base["rank"]["confidence"]
+    assert summary["placeId"] == base["place_id"]
+
+
 def test_extract_prefers_street_address_over_poi_name():
     fields = geo.extract_fields(_result(address_line1="Some Hospital"))
     assert fields["address_line1"] == "10 MG Road"
