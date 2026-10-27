@@ -47,7 +47,7 @@ _PAGES = [{"title": "contact", "url": "https://acme.example/contact",
 
 
 def _wire(monkeypatch, caplog, *, company="Acme", company_location="West Bengal",
-          pages=None, extracted=_EXTRACTED, cached=None, budget_ok=True,
+          pages=None, extracted=_EXTRACTED, cached=None,
           geo_result="default", retrieve_error=None, area=None):
     caplog.set_level(logging.INFO, logger="card-desk.address-attempt")
     writes = {"failed": 0, "locations": [], "cache": 0}
@@ -94,11 +94,18 @@ def _wire(monkeypatch, caplog, *, company="Acme", company_location="West Bengal"
 
     monkeypatch.setattr(address.address_ai, "extract_company_addresses",
                         fake_extract)
-    monkeypatch.setattr(address.budget, "reserve", lambda: budget_ok)
     fake_result = _geo_result() if geo_result == "default" else geo_result
     monkeypatch.setattr(
         address.geo, "geocode_many",
         lambda query, limit=5, country_filter="in": [] if fake_result is None else [fake_result])
+    # Never touch Geoapify from the worker tests: use the offline PIN table.
+    def fake_pin_area(pin):
+        row = address.pin_codes.lookup(pin)
+        return {"pin": row["pin"], "valid": row["valid"],
+                "lat": row["lat"], "lon": row["lon"],
+                "city": row["city"], "district": row["district"],
+                "state": row["state"], "source": "geonames"}
+    monkeypatch.setattr(address.pin_areas, "lookup", fake_pin_area)
     return writes
 
 
@@ -159,9 +166,13 @@ def test_country_mismatch_stops_simpler_lookups(monkeypatch, caplog):
 
     monkeypatch.setattr(address.geo, "geocode_many", fake_geocode)
     result = _run()
-    assert result["reason"] == "country_mismatch"
+    # The result is in the wrong country, so the pin is unusable; the address
+    # itself is still saved on its own anchor.
+    assert result["ok"] is True
+    assert result["reason"] == "approximate"
     assert len(calls) == 1
     assert "full lookup permanent failure: country_mismatch" in caplog.text
+    assert "pin_fallback" in caplog.text
 
 
 def test_international_contact_uses_expected_country(monkeypatch, caplog):
@@ -270,29 +281,23 @@ def test_database_location_cache_is_not_used_for_verification(monkeypatch, caplo
     assert result["reason"] == "verified"
     assert len(writes["locations"]) == 1
     assert writes["locations"][0]["precision"] == "STREET"
+    assert writes["locations"][0]["_precision_internal"] == "BUILDING"
     assert writes["cache"] == 1
 
 
-def test_budget_exhausted_records_without_attempt(monkeypatch, caplog):
-    writes = _wire(monkeypatch, caplog, budget_ok=False)
-    result = _run()
-    assert result["reason"] == "budget_exhausted"
-    assert writes["failed"] == 0
-    assert _recorded_reason(caplog) == "budget_exhausted"
-
-
-def test_postcode_mismatch_is_rejected(monkeypatch, caplog):
-    writes = _wire(monkeypatch, caplog,
+def test_postcode_mismatch_is_saved_with_pin_anchor(monkeypatch, caplog):
+    writes = _wire(monkeypatch, caplog, area=(22.5, 88.3),
                    geo_result=_geo_result(postcode="700001", city="Howrah"))
     result = _run()
-    assert result["ok"] is False
-    assert result["reason"] == "postcode_mismatch"
-    assert "outcome   : FAIL" in caplog.text
+    assert result["ok"] is True
+    assert result["reason"] == "approximate"
     assert "[FAIL] postcode:" in caplog.text
     assert "[FAIL] city:" in caplog.text
-    assert writes["locations"] == []
-    assert writes["failed"] == 1
-    assert _recorded_reason(caplog) == "postcode_mismatch"
+    assert writes["locations"]
+    assert writes["locations"][0]["precision"] == "AREA"
+    assert writes["locations"][0]["status"] == "APPROXIMATE"
+    assert "pin_source=pin_centre" in caplog.text
+    assert writes["failed"] == 0
 
 
 def test_low_confidence_is_saved_approximate(monkeypatch, caplog):
@@ -309,20 +314,22 @@ def test_area_distance_does_not_override_hard_city_postcode(monkeypatch, caplog)
     _wire(monkeypatch, caplog, area=(22.5, 88.3),
           geo_result=_geo_result(postcode="700001", city="Howrah"))
     result = _run()
-    assert result["reason"] == "postcode_mismatch"
+    assert result["reason"] == "approximate"
     assert "[FAIL] postcode:" in caplog.text
     assert "[PASS] area_distance:" in caplog.text
+    assert "pin_fallback" in caplog.text
 
 
-def test_wrong_country_is_rejected(monkeypatch, caplog):
-    writes = _wire(monkeypatch, caplog,
+def test_wrong_country_map_result_falls_back_to_anchor(monkeypatch, caplog):
+    writes = _wire(monkeypatch, caplog, area=(22.5, 88.3),
                    geo_result=_geo_result(country_code="us"))
     result = _run()
-    assert result["ok"] is False
-    assert result["reason"] == "country_mismatch"
-    assert writes["locations"] == []
-    assert writes["failed"] == 1
-    assert "outcome   : FAIL" in caplog.text
+    assert result["ok"] is True
+    assert result["reason"] == "approximate"
+    assert writes["locations"]
+    assert writes["locations"][0]["precision"] == "AREA"
+    assert writes["failed"] == 0
+    assert "pin_source=pin_centre" in caplog.text
 
 
 def test_rejection_without_street_line_is_not_saved(monkeypatch, caplog):
@@ -348,7 +355,7 @@ def test_trusted_registry_is_saved_without_map_result(monkeypatch, caplog):
     result = _run()
     assert result["reason"] == "approximate"
     assert result["address_status"] == "approximate"
-    assert "trusted source saved without a map result" in caplog.text
+    assert "saved approximate/CITY from none" in caplog.text
     assert len(writes["locations"]) == 1
     assert writes["locations"][0]["source_type"] == "REGISTRY"
     assert writes["locations"][0]["status"] == "APPROXIMATE"
@@ -390,13 +397,16 @@ def test_stale_database_cache_does_not_block_fresh_lookup(monkeypatch, caplog):
     assert "area from pin 700022" in caplog.text or "full:1/verified" in caplog.text
 
 
-def test_verified_keeps_extracted_parts_and_map_coordinates(monkeypatch, caplog):
+def test_house_mismatch_keeps_extracted_parts_and_is_approximate(monkeypatch, caplog):
     writes = _wire(monkeypatch, caplog,
                    geo_result=_geo_result(street="Park Street",
                                           housenumber="99",
                                           address_line1="99 Park Street"))
     result = _run()
-    assert result["reason"] == "verified"
+    # The map's house number contradicts the extracted address, so the pin is
+    # street-level at best, never building-level.
+    assert result["reason"] == "approximate"
+    assert writes["locations"][0]["precision"] == "STREET"
     assert result["address_line1"] == "12 Park Street"
     assert writes["locations"][0]["address_line1"] == "12 Park Street"
     assert writes["locations"][0]["latitude"] == 22.5
@@ -413,8 +423,8 @@ def test_verified_requires_street_overlap(monkeypatch, caplog):
     assert writes["locations"][0]["status"] == "APPROXIMATE"
 
 
-def test_verified_requires_half_km(monkeypatch, caplog):
-    writes = _wire(monkeypatch, caplog, area=(22.51, 88.3),
+def test_verified_requires_three_km(monkeypatch, caplog):
+    writes = _wire(monkeypatch, caplog, area=(22.55, 88.3),
                    geo_result=_geo_result())
     result = _run()
     assert result["reason"] == "approximate"
@@ -444,6 +454,7 @@ def test_verified_records_pass_and_warms_cache(monkeypatch, caplog):
     saved = writes["locations"][0]
     assert saved["source_type"] == "OWN_SITE"
     assert saved["precision"] == "STREET"
+    assert saved["_precision_internal"] == "BUILDING"
     assert saved["status"] == "VERIFIED"
     assert saved["evidence_saved"] is True
     assert _recorded_reason(caplog) == "verified"
@@ -536,3 +547,54 @@ def test_failure_is_reused_within_a_run(monkeypatch, caplog, tmp_path):
     assert calls["retrieve"] == 1
     assert "reused failure" in caplog.text
     address.address_cache.clear()
+
+def test_candidate_blocks_record_saved_location(monkeypatch, caplog):
+    writes = _wire(monkeypatch, caplog)
+    result = _run()
+    assert result["ok"] is True
+    assert "candidates: 1 (saved=1, primary=1)" in caplog.text
+    assert "candidate 1/1:" in caplog.text
+    assert "saved=loc-1" in caplog.text
+
+
+def test_pin_city_mismatch_clears_pin_but_keeps_address(monkeypatch, caplog):
+    writes = _wire(monkeypatch, caplog)
+
+    def fake_pin_area(pin):
+        row = address.pin_codes.lookup(pin)
+        return {"pin": row["pin"], "valid": True,
+                "lat": 22.52, "lon": 88.06, "city": "Howrah",
+                "district": "Howrah", "state": "West Bengal",
+                "source": "geoapify"}
+
+    monkeypatch.setattr(address.pin_areas, "lookup", fake_pin_area)
+    result = _run()
+    assert result["ok"] is True
+    assert writes["locations"]
+    assert "postal_code cleared" in caplog.text
+    assert "pin 700022 (Howrah/Howrah) does not match city Kolkata" in caplog.text
+
+def test_invalid_pin_is_dropped_and_address_saved(monkeypatch, caplog):
+    extracted = dict(_EXTRACTED, postal_code="996544")
+    writes = _wire(monkeypatch, caplog, extracted=extracted,
+                   area=(22.5, 88.3))
+    result = _run()
+    assert result["ok"] is True
+    assert result["reason"] in ("approximate", "verified")
+    assert writes["locations"]
+    assert "invalid pin dropped: 996544" in caplog.text
+    # The dropped PIN must not reappear as the extracted locator; a valid map
+    # result may still supply its own postcode.
+    assert "pin=-" in caplog.text
+
+
+def test_state_hint_conflict_is_saved_with_review(monkeypatch, caplog):
+    writes = _wire(monkeypatch, caplog, company_location="Telangana",
+                   area=(22.5, 88.3),
+                   geo_result=_geo_result(state="West Bengal",
+                                          state_code="WB"))
+    result = _run()
+    assert result["ok"] is True
+    assert result["reason"] in ("approximate", "verified")
+    assert writes["locations"]
+    assert "state_hint_conflict" in caplog.text

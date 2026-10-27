@@ -49,7 +49,7 @@ def _candidate(**overrides):
         "latitude": 22.5,
         "longitude": 88.3,
         "source_type": "OWN_SITE",
-        "precision": "STREET",
+        "precision": "BUILDING",
         "status": "VERIFIED",
         "evidence_saved": True,
         "found_count": 1,

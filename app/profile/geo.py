@@ -7,17 +7,19 @@ import re
 import requests
 
 from . import india_geo, pin_codes
+from .address_text import compact
 from .address_text import norm as _normalize
 
 log = logging.getLogger("card-desk.geo")
 
 GEOAPIFY_URL = "https://api.geoapify.com/v1/geocode/search"
 
-VERIFIED_KM = float(os.environ.get("ADDRESS_VERIFIED_KM", "0.5"))
-APPROXIMATE_KM = float(os.environ.get("ADDRESS_APPROXIMATE_KM", "25"))
-# A street-level match can survive a coarse/wrong PIN centroid further than an
-# area/city result, but not indefinitely.
-STREET_AREA_KM = float(os.environ.get("ADDRESS_STREET_AREA_KM", "50"))
+# Distance from the PIN centre (or the city centre when the PIN is unusable).
+# The PIN reference is now resolved through Geoapify, so a tighter radius is
+# defensible than the old 25 km / 50 km allowances.
+VERIFIED_KM = float(os.environ.get("ADDRESS_VERIFIED_KM", "3"))
+APPROXIMATE_KM = float(os.environ.get("ADDRESS_APPROXIMATE_KM", "10"))
+CITY_AREA_KM = float(os.environ.get("ADDRESS_CITY_AREA_KM", "15"))
 
 _WEAK_MATCHES = {
     "match_by_city_or_district",
@@ -25,13 +27,161 @@ _WEAK_MATCHES = {
     "match_by_postcode",
 }
 _COARSE_TYPES = {"city", "county", "state", "country", "postcode"}
-_STREET_TYPES = {"building", "amenity", "house", "street", "road", "highway"}
-_AREA_TYPES = {"suburb", "district", "locality", "neighbourhood", "quarter",
-               "borough", "postcode"}
+_STREET_TYPES = {"building", "house", "street", "road", "highway"}
+
+
+_CITY_TYPES = {"city", "county", "state", "country"}
+_BUILDING_TYPES = {"building", "house"}
+_STREET_RESULT_TYPES = {"street", "road", "highway"}
+# Amenity/landmark results describe a place, not a street line; they are AREA.
+_AREA_RESULT_TYPES = {"postcode", "suburb", "district", "locality",
+                      "neighbourhood", "quarter", "borough", "amenity"}
+_VERY_LOW_CONFIDENCE = 0.3
+
+# Words that appear in almost every Indian street line and therefore prove
+# nothing about a match on their own.
+_STREET_STOPWORDS = {
+    "road", "street", "lane", "nagar", "colony", "area", "sector", "block",
+    "floor", "plot", "building", "house", "opposite", "near", "main",
+    "cross", "stage", "phase", "layout", "extension", "estate", "industrial",
+    "society", "complex", "tower", "flat", "unit", "shop", "office", "ground",
+    "first", "second", "third", "fourth", "fifth", "floor",
+}
 
 
 class GeoConfigError(RuntimeError):
     pass
+
+
+def _street_tokens(text):
+    """Distinctive street-name words, dropping universal address filler."""
+    return {token for token in _normalize(text).split()
+            if len(token) >= 4 and token not in _STREET_STOPWORDS
+            and not token.isdigit()}
+
+
+def _street_overlap(street, expected_text):
+    """True when the result's street name actually appears in the address."""
+    street = _normalize(street)
+    expected_text = _normalize(expected_text)
+    if not street or not expected_text:
+        return False
+    if len(street) >= 4 and street in expected_text:
+        return True
+    return bool(_street_tokens(street) & _street_tokens(expected_text))
+
+
+def _house_match(housenumber, expected_text):
+    """True when the result's house/plot number appears in the address."""
+    house = compact(housenumber)
+    expected_text = _normalize(expected_text)
+    if not house or not expected_text:
+        return False
+    if len(house) >= 2 and house in compact(expected_text):
+        return True
+    return bool(re.search(r"\b%s\b" % re.escape(_normalize(housenumber)),
+                          expected_text))
+
+
+def match_result(result, expected=None):
+    """Shared match facts for precision, the street check and result scoring."""
+    result = result or {}
+    expected = expected or {}
+    expected_text = " ".join(str(expected.get(key) or "")
+                             for key in ("address_line1", "address_line2"))
+    street = _normalize(result.get("street"))
+    street_present = bool(street)
+    overlap = _street_overlap(street, expected_text)
+    has_expected_street = bool(_normalize(expected_text))
+    return {
+        "street": street,
+        "street_overlap": overlap,
+        "street_mismatch": bool(has_expected_street
+                                and (not street_present or not overlap)),
+        "house_match": _house_match(result.get("housenumber"), expected_text),
+        "confidence": _confidence(result),
+        "result_type": _normalize(result.get("result_type")),
+        "match_type": _normalize((result.get("rank") or {}).get("match_type")),
+    }
+
+
+def result_precision(result, expected=None):
+    """BUILDING / STREET / AREA / CITY from match quality, not object type.
+
+    ``expected`` is the extracted address. Without it (for old callers and
+    summaries), fall back to the previous object-type mapping.
+    """
+    if not result:
+        return "CITY"
+    result_type = _normalize(result.get("result_type"))
+    match_type = _normalize((result.get("rank") or {}).get("match_type"))
+    if result_type in _CITY_TYPES or match_type in {
+            "match_by_city_or_district", "match_by_country_or_state"}:
+        return "CITY"
+
+    if expected and (_normalize(expected.get("address_line1"))
+                     or _normalize(expected.get("address_line2"))):
+        match = match_result(result, expected)
+        # A street mismatch can never be a street/building pin. Very low
+        # confidence is treated the same way even when the text agrees.
+        if match["street_mismatch"] or match["confidence"] < _VERY_LOW_CONFIDENCE:
+            return "AREA"
+        if (result_type in _BUILDING_TYPES and match["house_match"]
+                and match["street_overlap"]):
+            return "BUILDING"
+        if (result_type in _BUILDING_TYPES | _STREET_RESULT_TYPES
+                and match["street_overlap"]):
+            return "STREET"
+    elif (result.get("housenumber") or result_type in _STREET_TYPES
+          or (match_type in {"full_match", "match_by_building",
+                             "match_by_street"} and result.get("street"))):
+        return "STREET"
+
+    if (result_type in _AREA_RESULT_TYPES or result.get("suburb")
+            or result.get("district") or match_type in {"match_by_postcode"}):
+        return "AREA"
+    if result_type in _STREET_RESULT_TYPES:
+        return "STREET"
+    return "CITY"
+
+
+def match_score(result, expected=None, area=None):
+    """Precision plus the components Step 4 scores candidates on."""
+    match = match_result(result, expected)
+    distance = None
+    if result and area:
+        try:
+            distance = haversine_km(area[0], area[1],
+                                    result.get("lat"), result.get("lon"))
+        except (TypeError, ValueError):
+            distance = None
+    return {
+        **match,
+        "precision": result_precision(result, expected),
+        "distance_km": distance,
+    }
+
+
+def landmark_qualified(result, expected, area, max_km=2.0):
+    """A landmark rung result is usable only when it names this address.
+
+    The landmark query is intentionally noisy ("Mani Casadona, Kolkata"), so a
+    result must overlap the address text and sit near the area reference.
+    """
+    if not result or not area:
+        return False
+    name = " ".join(str(result.get(key) or "")
+                    for key in ("name", "street", "address_line1"))
+    expected_text = " ".join(str((expected or {}).get(key) or "")
+                             for key in ("address_line1", "address_line2"))
+    if not (_street_tokens(name) & _street_tokens(expected_text)):
+        return False
+    try:
+        distance = haversine_km(area[0], area[1],
+                                result.get("lat"), result.get("lon"))
+    except (TypeError, ValueError):
+        return False
+    return distance <= max_km
 
 
 class GeoRateLimit(Exception):
@@ -55,21 +205,8 @@ def _timeout(timeout=None):
     return int(os.environ.get("GEOAPIFY_TIMEOUT", "20"))
 
 
-def geocode_many(address, *, api_key=None, timeout=None, limit=5,
-                 country_filter="in"):
-    """Forward-geocode ``address`` and return up to ``limit`` result dicts.
-
-    Raises GeoConfigError / GeoRateLimit / GeoTransient on failure."""
-    key = _api_key(api_key)
-    params = {
-        "text": address,
-        "lang": "en",
-        "limit": max(1, min(int(limit), 10)),
-        "format": "json",
-        "apiKey": key,
-    }
-    if country_filter:
-        params["filter"] = "countrycode:" + str(country_filter)
+def _results(params, timeout=None):
+    """Run one Geoapify geocode request and return its results."""
     try:
         response = requests.get(GEOAPIFY_URL, params=params,
                                 timeout=_timeout(timeout))
@@ -87,6 +224,38 @@ def geocode_many(address, *, api_key=None, timeout=None, limit=5,
         raise GeoTransient("HTTP %d" % response.status_code)
     response.raise_for_status()
     return response.json().get("results") or []
+
+
+def geocode_many(address, *, api_key=None, timeout=None, limit=5,
+                 country_filter="in"):
+    """Forward-geocode ``address`` and return up to ``limit`` result dicts.
+
+    Raises GeoConfigError / GeoRateLimit / GeoTransient on failure."""
+    key = _api_key(api_key)
+    params = {
+        "text": address,
+        "lang": "en",
+        "limit": max(1, min(int(limit), 10)),
+        "format": "json",
+        "apiKey": key,
+    }
+    if country_filter:
+        params["filter"] = "countrycode:" + str(country_filter)
+    return _results(params, timeout)
+
+
+def geocode_postcode(pin, *, api_key=None, timeout=None):
+    """Resolve a PIN to its centre through Geoapify's postcode search."""
+    key = _api_key(api_key)
+    params = {
+        "postcode": pin,
+        "lang": "en",
+        "limit": 1,
+        "format": "json",
+        "apiKey": key,
+        "filter": "countrycode:in",
+    }
+    return _results(params, timeout)
 
 
 _INDIA_HINTS = (
@@ -158,29 +327,6 @@ def same_city(first, second):
     if not a or not b:
         return False
     return a == b or a in b or b in a
-
-
-def result_precision(result):
-    """STREET / AREA / CITY from what the geocoder actually returned.
-
-    This is deliberately independent of the extracted address line: an
-    extracted street line is an input, not proof that the saved pin is
-    street-level.
-    """
-    if not result:
-        return "CITY"
-    result_type = _normalize(result.get("result_type"))
-    match_type = _normalize((result.get("rank") or {}).get("match_type"))
-    if (result.get("housenumber")
-            or result_type in _STREET_TYPES
-            or (match_type in {"full_match", "match_by_building",
-                               "match_by_street"} and result.get("street"))):
-        return "STREET"
-    if (result_type in _AREA_TYPES or result.get("suburb")
-            or result.get("district")
-            or match_type in {"match_by_postcode"}):
-        return "AREA"
-    return "CITY"
 
 
 def check_all(result, company_location=None, expected=None, country_code="in"):
@@ -267,11 +413,10 @@ def check_all(result, company_location=None, expected=None, country_code="in"):
                                         ("address_line1", "address_line2")))
         street = _normalize(result.get("street"))
         house = _normalize(result.get("housenumber"))
-        tokens = [t for t in street.split() if len(t) >= 4]
-        street_ok = bool((house and house in exp_text)
-                         or any(t in exp_text for t in tokens))
-        add("street", street_ok,
-            "expected=%s | result=%s" % (exp_text or "-", street or "-"),
+        match = match_result(result, expected)
+        add("street", match["street_overlap"],
+            "expected=%s | result=%s | house=%s"
+            % (exp_text or "-", street or "-", house or "-"),
             "street_mismatch")
 
     # The card hint may name a city ("Hyderabad") or a state ("Telangana").
@@ -317,7 +462,7 @@ def accept(result, company_location=None, expected=None):
 
 
 OUTCOME_RANK = {"rejected": 0, "approximate": 1, "verified": 2}
-PRECISION_RANK = {"CITY": 1, "AREA": 2, "STREET": 3}
+PRECISION_RANK = {"CITY": 1, "AREA": 2, "STREET": 3, "BUILDING": 4}
 
 
 def _join_address(parts):
@@ -363,8 +508,12 @@ def landmark_query(expected):
                           expected.get("country")])
 
 
-def lookup_queries(expected):
-    """Fallback chain: full address, street + postcode, landmark, area + city."""
+def lookup_queries(expected, area=None):
+    """Fallback chain: full address, street + PIN, [gated landmark], area + city.
+
+    The landmark rung is only offered when an area reference exists; its results
+    are additionally filtered by ``landmark_qualified`` before assessment.
+    """
     expected = expected or {}
     pin = pin_codes.normalize_pin(expected.get("postal_code"))
     postal = pin or expected.get("postal_code")
@@ -376,11 +525,12 @@ def lookup_queries(expected):
         ("street_postcode", _join_address([
             expected.get("address_line1"), expected.get("address_line2"),
             postal])),
-        ("landmark_city", landmark_query(expected)),
-        ("area_city", _join_address([
-            expected.get("city"), expected.get("state"),
-            postal, expected.get("country")])),
     ]
+    if area:
+        candidates.append(("landmark_city", landmark_query(expected)))
+    candidates.append(("area_city", _join_address([
+        expected.get("city"), expected.get("state"),
+        postal, expected.get("country")])))
     out, seen = [], set()
     for kind, query in candidates:
         key = query.lower()
@@ -407,28 +557,28 @@ def _confidence(result):
         return 0.0
 
 
-_TRUSTED_SOURCES = {"OWN_SITE", "REGISTRY"}
 _HARD_CHECKS = {"country", "expected_state", "city", "postcode",
                 "postcode_valid", "area_distance"}
-# A contradiction with the contact's own card is hard for a directory, but a
-# trusted page may describe a real branch in another state. Those are saved as
-# approximate + review, never verified.
+# A contradiction with the contact's own card is now a review flag, never a
+# rejection (the card hint can be stale or another branch).
 _CONTACT_CHECKS = {"state"}
 
 
 def assess(result, company_location=None, expected=None, *, area=None,
-           source_type=None, country_code="in"):
+           area_kind=None, source_type=None, country_code="in"):
     """Classify a geocode result as verified / approximate / rejected.
 
-    Hard contradictions (wrong country/state/city/PIN, invalid PIN, >25 km)
-    reject the result. That is the fix for the old behaviour where a candidate
-    with four failed checks still became APPROXIMATE. Soft failures (low
-    confidence, weak match type, street wording, area-level pin) may still be
-    saved, but only as APPROXIMATE and with the real pin precision recorded.
+    Hard contradictions (wrong country/state/city/PIN, invalid PIN, too far
+    from the area anchor) reject the result. ``area_kind`` says whether the
+    anchor is a PIN centre (``"pin"``, ≤10 km) or the looser city-centre
+    fallback (``"city"``, ≤15 km). Soft failures (low confidence, weak match
+    type, street wording, area-level pin) may still be saved, but only as
+    APPROXIMATE and with the real pin precision recorded.
     """
     checks = check_all(result, company_location, expected,
                        country_code=country_code)
     distance = None
+    area_limit = CITY_AREA_KM if area_kind == "city" else APPROXIMATE_KM
     if result and area:
         try:
             distance = haversine_km(area[0], area[1],
@@ -438,11 +588,11 @@ def assess(result, company_location=None, expected=None, *, area=None,
         if distance is not None:
             checks.append({
                 "name": "area_distance",
-                "passed": distance <= APPROXIMATE_KM,
-                "detail": ("%.1f km from area (verified <= %.1f km, "
-                           "approximate <= %.0f km, street <= %.0f km)")
-                          % (distance, VERIFIED_KM, APPROXIMATE_KM,
-                             STREET_AREA_KM),
+                "passed": distance <= area_limit,
+                "detail": ("%.1f km from %s area (verified <= %.1f km, "
+                           "limit <= %.0f km)")
+                          % (distance, area_kind or "pin", VERIFIED_KM,
+                             area_limit),
                 "reason": "area_mismatch",
             })
 
@@ -450,8 +600,8 @@ def assess(result, company_location=None, expected=None, *, area=None,
     failed_names = {item.get("name") for item in failed}
     first_reason = first_failure(checks)
     has_street = bool(_normalize((expected or {}).get("address_line1")))
-    precision = result_precision(result)
-    trusted = source_type in _TRUSTED_SOURCES
+    precision = result_precision(result, expected)
+    match = match_result(result, expected)
     verdict = {
         "outcome": "rejected",
         "reason": first_reason,
@@ -460,6 +610,7 @@ def assess(result, company_location=None, expected=None, *, area=None,
         "confidence": _confidence(result),
         "result": result,
         "pin_precision": precision,
+        "match": match,
         "review_reasons": [],
     }
 
@@ -474,18 +625,9 @@ def assess(result, company_location=None, expected=None, *, area=None,
 
     hard = failed_names & (_HARD_CHECKS - {"area_distance"})
     area_failed = "area_distance" in failed_names
-    # A confident street-level match is stronger evidence than a coarse PIN
-    # centroid, which can itself be wrong (for example 700160). Give it more
-    # room before calling it the wrong area, but still reject a genuinely far
-    # result and all area/city-level results beyond the normal radius.
-    if area_failed and distance is not None:
-        strong_text = not (failed_names & {"postcode", "postcode_valid",
-                                           "city", "expected_state", "street"})
-        limit = STREET_AREA_KM if (precision == "STREET" and strong_text) \
-            else APPROXIMATE_KM
-        if distance > limit:
-            verdict["reason"] = "area_mismatch"
-            return verdict
+    if area_failed and distance is not None and distance > area_limit:
+        verdict["reason"] = "area_mismatch"
+        return verdict
 
     contact = failed_names & _CONTACT_CHECKS
 
@@ -498,31 +640,31 @@ def assess(result, company_location=None, expected=None, *, area=None,
             first_reason)
         return verdict
 
-    if contact and not trusted:
-        verdict["reason"] = next(
-            (item["reason"] for item in failed if item["name"] in contact),
-            first_reason)
-        return verdict
-
-    if contact and trusted:
+    if contact:
+        # A contradiction with the contact's own card is a review flag, not an
+        # address rejection: the same company can have a branch in another
+        # state, and the card hint may itself be stale. Step 2 keeps the address
+        # with its own PIN/city anchor.
+        reasons = sorted({item["reason"] for item in failed
+                          if item["name"] in contact})
         verdict.update(
             outcome="approximate",
             reason=next((item["reason"] for item in failed
                          if item["name"] in contact), first_reason),
-            review_reasons=sorted({reason for name, reason in
-                                   ((item["name"], item["reason"])
-                                    for item in failed)
-                                   if name in contact}))
+            review_reasons=sorted(set(reasons) | {"state_hint_conflict"}))
         return verdict
 
     essentials = {"street_level", "match_type", "confidence",
                   "street_present", "street"}
-    if distance is None:
-        # No area centre available: fall back to the postcode/city text checks,
-        # which are hard checks already handled above.
-        essentials |= {"postcode", "city"}
-    if (precision == "STREET"
+    expected_post = re.sub(r"\D", "", str((expected or {}).get("postal_code") or ""))
+    result_post = re.sub(r"\D", "", str(result.get("postcode") or ""))
+    same_pin = bool(expected_post) and expected_post == result_post
+    expected_city = _normalize((expected or {}).get("city"))
+    same_city_result = bool(expected_city) and same_city(
+        expected_city, result.get("city"))
+    if (precision == "BUILDING"
             and not (failed_names & essentials)
+            and same_pin and same_city_result
             and (distance is None or distance <= VERIFIED_KM)):
         verdict.update(outcome="verified", reason="ok")
         return verdict
@@ -555,7 +697,7 @@ def best_candidate(verdicts):
     return max(verdicts, key=score)
 
 
-def result_summary(result):
+def result_summary(result, expected=None):
     """Flatten a Geoapify result into the fields the attempt record prints."""
     if not result:
         return None
@@ -571,6 +713,6 @@ def result_summary(result):
         "placeId": result.get("place_id") or "",
         "postcode": postcode,
         "street": result.get("street") or "",
-        "precision": result_precision(result),
+        "precision": result_precision(result, expected),
         "postcodeValid": pin_codes.is_valid(postcode) if postcode else None,
     }

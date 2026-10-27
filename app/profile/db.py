@@ -334,9 +334,14 @@ def merge_company_location(contact_id, candidate, company_location=None):
     else:
         insert_company_location(contact_id, candidate)
 
-    primary = locations.choose_primary(get_company_locations(contact_id),
-                                       company_location)
+    rows = get_company_locations(contact_id)
+    primary = locations.choose_primary(rows, company_location)
+    saved = next((row for row in rows
+                  if locations.same_location(row, candidate)), None)
     if primary:
+        primary = dict(primary)
+        if saved:
+            primary["_saved_location_id"] = saved.get("id")
         set_primary_location(contact_id, primary)
     return primary
 

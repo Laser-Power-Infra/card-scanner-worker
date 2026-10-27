@@ -10,7 +10,7 @@ import os
 
 import pika
 
-from app.profile import budget, config, db, handlers
+from app.profile import config, db, handlers
 from app.shared import db as shared_db
 
 logging.basicConfig(level=logging.INFO,
@@ -130,8 +130,6 @@ def main():
         if args.dry_run:
             for r in rows:
                 print("  %s | %s | %s" % (r["id"], r.get("company"), r.get("companyLocation")))
-            if p == "address":
-                print("  geocode budget remaining: %d" % budget.remaining())
             continue
 
         payloads = [_payload(p, r) for r in rows]

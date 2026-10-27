@@ -112,6 +112,12 @@ GeoNames India postal-code export (CC BY 4.0). Regenerate with:
 python -m scripts.build_pin_prefixes
 ```
 
+The distance gate anchors on the PIN centre, not the district. Each PIN is
+resolved once through Geoapify's postcode search and cached in
+`data/pin_areas.json` (gitignored, disposable). GeoNames coordinates remain the
+labelled fallback when Geoapify has no answer. Delete that file to force a
+fresh lookup for every PIN.
+
 ### Temporary address cache
 
 `app/profile/address_cache.py` is a deliberate, disposable cache. It freezes

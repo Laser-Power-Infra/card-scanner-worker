@@ -9,7 +9,7 @@ import requests
 
 from ...shared import search as search_mod
 from .. import (address_ai, address_attempt, address_cache, address_fields,
-                budget, config, db, geo, locations, page_quality, pin_codes)
+                config, db, geo, locations, page_quality, pin_areas, pin_codes)
 from ..address_text import norm, norm_key, project
 
 log = logging.getLogger("card-desk.worker.address")
@@ -365,13 +365,39 @@ def _valid_addresses(raw_addresses, pages, country_code="in",
             india=india,
         )
         fields = prepared["fields"]
+        derived = list(prepared["derived"])
+
+        # A known PIN that names a different city is not a locator for this
+        # address. Clear the PIN, keep the street address and let the city
+        # centre anchor the distance gate (the address itself is still useful).
+        pin_row = prepared.get("pin") or {}
+        pin_city_note = ""
+        if india and pin_row.get("valid") and fields.get("city"):
+            if not pin_areas.city_matches(pin_row["pin"], fields["city"]):
+                area = pin_areas.lookup(pin_row["pin"])
+                pin_city_note = ("pin %s (%s/%s) does not match city %s"
+                                 % (pin_row["pin"], area.get("city") or "-",
+                                    area.get("district") or "-",
+                                    fields["city"]))
+                derived.append("postal_code cleared: " + pin_city_note)
+                prepared["conflicts"].append("pin_city_mismatch:%s->%s"
+                                             % (fields.get("postal_code"),
+                                                pin_city_note))
+                fields["postal_code"] = ""
+                fields["_pin_city_mismatch"] = pin_city_note
+
         if not locations.norm(fields.get("address_line1")):
             rejected.append((fields, "no_street_line"))
             continue
         if any(conflict.startswith("invalid_pin:")
                for conflict in prepared["conflicts"]):
-            rejected.append((fields, "invalid_postcode"))
-            continue
+            # A bad PIN is a pin problem, not an address problem. Drop it and
+            # keep the street line; the city anchor below still locates it.
+            raw_pin = next((conflict.split(":", 1)[1]
+                            for conflict in prepared["conflicts"]
+                            if conflict.startswith("invalid_pin:")), "")
+            fields["_invalid_pin"] = raw_pin
+            derived.append("invalid pin dropped: %s" % (raw_pin or "-"))
         if not address_fields.deliverable(fields, india=india):
             rejected.append((fields, "incomplete"))
             continue
@@ -385,7 +411,7 @@ def _valid_addresses(raw_addresses, pages, country_code="in",
         fields["evidence_url"] = page.get("url") or cleaned.get("evidence_url") or ""
         fields["address_type"] = cleaned.get("address_type") or "other"
         fields["quote"] = cleaned.get("quote") or ""
-        fields["_derived"] = prepared["derived"]
+        fields["_derived"] = derived
         fields["_pin"] = prepared["pin"]
         valid.append(fields)
     return valid, rejected
@@ -394,6 +420,13 @@ def _valid_addresses(raw_addresses, pages, country_code="in",
 def _note_candidates(attempt, valid, rejected, chosen=None):
     attempt["notes"].append("address candidates: valid=%d rejected=%d"
                             % (len(valid), len(rejected)))
+    for address in valid:
+        if address.get("_pin_city_mismatch"):
+            attempt["notes"].append("postal_code cleared: %s"
+                                    % address["_pin_city_mismatch"])
+        if address.get("_invalid_pin"):
+            attempt["notes"].append("invalid pin dropped: %s"
+                                    % address["_invalid_pin"])
     for address, reason in rejected:
         attempt["notes"].append(
             "rejected address (%s): %s %s" % (
@@ -420,6 +453,10 @@ def _save_location(contact_id, fields, extracted, website, official_site,
         website=website, official_site=official_site, status=status,
         pin_precision=pin_precision)
     primary = db.merge_company_location(contact_id, candidate, company_location)
+    saved_id = _saved_location_id(primary, candidate)
+    if primary is not None and saved_id:
+        primary = dict(primary)
+        primary["_saved_location_id"] = saved_id
     # Only a verified result may fill the card-owned field, and only when the
     # contact had no location at all.
     if (primary and not company_location and primary.get("city")
@@ -429,17 +466,31 @@ def _save_location(contact_id, fields, extracted, website, official_site,
     return primary
 
 
+def _saved_location_id(primary, candidate):
+    """Row id of the location this candidate wrote (not the primary row)."""
+    if not primary:
+        return None
+    saved = primary.get("_saved_location_id")
+    if saved:
+        return saved
+    if locations.same_location(primary, candidate):
+        return primary.get("id")
+    return None
+
+
 def _area_point(extracted, notes, country_filter="in"):
     """Coordinates used to judge distance from the address's own area.
 
-    A valid PIN already carries a centroid in the local GeoNames table, so the
-    common case costs zero Geoapify requests. Fall back to the cached area
-    lookup only when the PIN is missing/unknown.
+    A valid PIN is resolved once to a Geoapify PIN centre (cached forever in
+    ``pin_areas``); the common case costs zero Geoapify requests after the
+    first contact for that PIN. Fall back to the cached area/city lookup only
+    when the PIN is missing, unknown, or has no coordinates.
     """
-    pin = pin_codes.lookup(extracted.get("postal_code"))
-    if pin["valid"] and pin["lat"] is not None and pin["lon"] is not None:
-        notes.append("area from pin %s (%s)" % (pin["pin"], pin["city"] or "-"))
-        return (pin["lat"], pin["lon"])
+    area = pin_areas.lookup(extracted.get("postal_code"))
+    if area["valid"] and area["lat"] is not None and area["lon"] is not None:
+        notes.append("area from pin %s (%s, %s)" % (
+            area["pin"], area.get("city") or "-", area.get("source") or "-"))
+        return {"point": (area["lat"], area["lon"]), "source": "pin"}
 
     query = geo.area_query(extracted)
     if not query:
@@ -449,10 +500,8 @@ def _area_point(extracted, notes, country_filter="in"):
     if (cached and cached.get("resolved")
             and cached.get("latitude") is not None
             and cached.get("longitude") is not None):
-        return (cached["latitude"], cached["longitude"])
-    if not budget.reserve():
-        notes.append("budget exhausted before area lookup")
-        return None
+        return {"point": (cached["latitude"], cached["longitude"]),
+                "source": "city"}
     try:
         results = geo.geocode_many(query, limit=1,
                                    country_filter=country_filter)
@@ -472,7 +521,16 @@ def _area_point(extracted, notes, country_filter="in"):
         key, query, result.get("lat"), result.get("lon"),
         result.get("place_id"), result.get("formatted"),
         result.get("country"), result.get("state"), expires)
-    return (result.get("lat"), result.get("lon"))
+    return {"point": (result.get("lat"), result.get("lon")), "source": "city"}
+
+
+def _area_parts(reference):
+    """Accept the dict shape and the old bare-tuple shape (tests, callers)."""
+    if reference is None:
+        return None, None
+    if isinstance(reference, dict):
+        return reference.get("point"), reference.get("source")
+    return reference, "pin"
 
 
 def _fields_for(result, extracted):
@@ -533,6 +591,51 @@ def _best_reason(reasons, aborted):
     return reasons[0] if reasons else (aborted or "no_results")
 
 
+def _save_anchored(contact_id, website, official_site, company_location,
+                   extracted, area_ref, source_type, low_trust, notes,
+                   rejected, lookups):
+    """Address is good but the map result is not: save it on its own anchor."""
+    point, anchor_kind = _area_parts(area_ref)
+    fields = _fields_for(None, extracted)
+    if point:
+        fields["latitude"], fields["longitude"] = point
+    precision = "AREA" if anchor_kind == "pin" else "CITY"
+    pin_source = ("pin_centre" if anchor_kind == "pin"
+                  else "city_centre" if anchor_kind == "city" else "none")
+    status = "APPROXIMATE"
+    primary = _save_location(
+        contact_id, fields, extracted, website, official_site,
+        company_location, status=status, pin_precision=precision,
+        low_trust=low_trust)
+    reason = (rejected or {}).get("reason") or "no_area_anchor"
+    review = ["pin_fallback", reason]
+    if low_trust:
+        review.append("low_company_match")
+    notes.append("saved approximate/%s from %s (map: %s)"
+                 % (precision, pin_source, reason))
+    verdict = dict(rejected or {})
+    verdict.update({
+        "outcome": "approximate",
+        "reason": "pin_fallback",
+        "pin_precision": precision,
+        "distance_km": (rejected or {}).get("distance_km"),
+    })
+    return {
+        "primary": primary,
+        "location_id": (primary or {}).get("_saved_location_id"),
+        "fields": fields,
+        "status": status,
+        "precision": precision,
+        "pin_source": pin_source,
+        "rejected_map": geo.result_summary(
+            (rejected or {}).get("result"), extracted),
+        "review": sorted(set(review)),
+        "verdict": verdict,
+        "source_type": source_type,
+        "extracted": extracted,
+    }, "ok", lookups, verdict
+
+
 def _process_address(contact_id, company, website, official_site,
                      company_location, extracted, country_filter, low_trust,
                      notes):
@@ -541,7 +644,8 @@ def _process_address(contact_id, company, website, official_site,
     Returns ``(saved_or_None, reason, lookups, verdict)``.
     """
     normalized = _normalize_address(extracted)
-    area = _area_point(extracted, notes, country_filter)
+    area_ref = _area_point(extracted, notes, country_filter)
+    area, area_kind = _area_parts(area_ref)
     source_type = locations.source_type(
         extracted.get("evidence_url") or "", website, official_site)
     lookups = []
@@ -553,7 +657,8 @@ def _process_address(contact_id, company, website, official_site,
     cached_result = address_cache.get_geocode(company, website, normalized)
     if cached_result:
         verdict = geo.assess(cached_result, company_location, extracted,
-                             area=area, source_type=source_type,
+                             area=area, area_kind=area_kind,
+                             source_type=source_type,
                              country_code=country_filter)
         if verdict["outcome"] in ("verified", "approximate"):
             lookups.append({
@@ -572,11 +677,7 @@ def _process_address(contact_id, company, website, official_site,
 
     if best is None:
         aborted = None
-        for kind, query in geo.lookup_queries(extracted):
-            if not budget.reserve():
-                aborted = "budget_exhausted"
-                notes.append("budget exhausted before %s lookup" % kind)
-                break
+        for kind, query in geo.lookup_queries(extracted, area=area):
             try:
                 results = geo.geocode_many(query, limit=5,
                                            country_filter=country_filter)
@@ -590,10 +691,33 @@ def _process_address(contact_id, company, website, official_site,
                              % (kind, type(exc).__name__, exc))
                 break
 
-            verdicts = [geo.assess(result, company_location, extracted,
-                                   area=area, source_type=source_type,
-                                   country_code=country_filter)
-                        for result in results]
+            if kind == "landmark_city":
+                raw_count = len(results)
+                results = [result for result in results
+                           if geo.landmark_qualified(result, extracted, area)]
+                if raw_count and not results:
+                    notes.append("landmark results filtered: %d outside "
+                                 "name overlap or 2 km" % raw_count)
+                if not results:
+                    lookups.append({
+                        "kind": kind, "query": query, "results": 0,
+                        "best": "no_results", "reason": "landmark_not_qualified",
+                        "worked": False,
+                    })
+                    continue
+
+            verdicts = []
+            for result in results:
+                verdict = geo.assess(result, company_location, extracted,
+                                     area=area, area_kind=area_kind,
+                                     source_type=source_type,
+                                     country_code=country_filter)
+                # A landmark hit is only a locator for the area unless it is a
+                # true building match; it must never claim a street pin.
+                if (kind == "landmark_city"
+                        and verdict["pin_precision"] != "BUILDING"):
+                    verdict["pin_precision"] = "AREA"
+                verdicts.append(verdict)
             pick = geo.best_candidate(verdicts)
             lookups.append({
                 "kind": kind,
@@ -618,26 +742,28 @@ def _process_address(contact_id, company, website, official_site,
             # remaining queries can only add coarse (CITY/AREA) duplicates and
             # each one costs a Geoapify call.
             if best and (best["outcome"] == "verified"
-                         or best.get("pin_precision") == "STREET"):
+                         or best.get("pin_precision") in ("STREET", "BUILDING")):
                 break
 
         if best_lookup is not None:
             lookups[best_lookup]["worked"] = True
-        if aborted and best is None:
-            return None, aborted, lookups, verdict
 
+    rejected = None
+    if best is not None and best["outcome"] not in ("verified", "approximate"):
+        rejected = best
+        best = None
     if best is None:
-        verdict = geo.assess(None, company_location, extracted,
-                             area=area, source_type=source_type,
-                             country_code=country_filter)
-        if verdict["outcome"] == "approximate":
-            best = verdict
-            notes.append("trusted source saved without a map result")
-        else:
-            return None, "no_results", lookups, verdict
-
-    if best["outcome"] not in ("verified", "approximate"):
-        return None, best.get("reason") or "no_results", lookups, best
+        if rejected is None:
+            rejected = geo.assess(None, company_location, extracted,
+                                  area=area, area_kind=area_kind,
+                                  source_type=source_type,
+                                  country_code=country_filter)
+        # Address evidence is already validated by _valid_addresses. A bad or
+        # missing map result only means the pin is bad: keep the address and
+        # anchor it on the PIN centre (AREA) or city centre (CITY).
+        return _save_anchored(
+            contact_id, website, official_site, company_location, extracted,
+            area_ref, source_type, low_trust, notes, rejected, lookups)
 
     # TEMPORARY CACHE: only accepted results are cached. A rejected candidate
     # must be re-tried on the next run, not frozen for 72 hours.
@@ -667,9 +793,12 @@ def _process_address(contact_id, company, website, official_site,
         status.lower(), precision, fields.get("city") or "-"))
     return {
         "primary": primary,
+        "location_id": (primary or {}).get("_saved_location_id"),
         "fields": fields,
         "status": status,
         "precision": precision,
+        "pin_source": "map",
+        "rejected_map": None,
         "review": review,
         "verdict": best,
         "source_type": source_type,
@@ -711,7 +840,7 @@ def run(task):
                           "FAIL", "no_company", mark_failed=True)
 
         # TEMPORARY CACHE: reuse a deterministic failure within TTL. Transient
-        # budget/rate-limit errors are never stored by address_cache.
+        # rate-limit errors are never stored by address_cache.
         cached_failure = address_cache.load_failure(company, website)
         if cached_failure:
             reason = cached_failure.get("reason") or "no_results"
@@ -807,21 +936,42 @@ def run(task):
             ordered.append(address)
         chosen = ordered[0] if ordered else None
         _note_candidates(attempt, valid, rejected, chosen)
-        attempt["extracted"] = chosen
         notes = attempt["notes"]
         if country_filter != "in":
             notes.append("international contact: expected country %s"
                          % country_filter)
 
+        limit = max(1, config.ADDRESS_MAX_LOCATIONS)
+        batch = ordered[:limit]
         saved, reasons, lookups, review = [], [], [], []
+        candidates = []
         last_verdict = None
-        for address in ordered[:max(1, config.ADDRESS_MAX_LOCATIONS)]:
+        for index, address in enumerate(batch, start=1):
             result, reason, address_lookups, address_verdict = _process_address(
                 contact_id, company, website, official_site, company_location,
                 address, country_filter, low_trust, notes)
             lookups.extend(address_lookups)
             if address_verdict:
                 last_verdict = address_verdict
+            verdict = address_verdict or {}
+            candidates.append(address_attempt.candidate(
+                index, len(batch),
+                extracted=address,
+                address_type=address.get("address_type") or "other",
+                evidence_url=address.get("evidence_url") or "",
+                lookups=address_lookups,
+                checks=verdict.get("checks") or [],
+                map_result=geo.result_summary(verdict.get("result"), address),
+                verdict=verdict.get("outcome") or
+                ("saved" if result else "rejected"),
+                precision=(result or {}).get("precision")
+                or verdict.get("pin_precision") or "",
+                distance_km=verdict.get("distance_km"),
+                reason=verdict.get("reason") or reason,
+                location_id=(result or {}).get("location_id"),
+                accepted=bool(result),
+                pin_source=(result or {}).get("pin_source") or "",
+                rejected=(result or {}).get("rejected_map")))
             if result:
                 saved.append(result)
                 review.extend(result.get("review") or [])
@@ -842,9 +992,8 @@ def run(task):
                 (last_verdict or {}).get("result"))
             log.info("address: rejected (%s) for %s", reason, company)
             return finish({"ok": False, "site": "address", "reason": reason},
-                          "FAIL", reason,
-                          mark_failed=reason != "budget_exhausted",
-                          lookups=lookups)
+                          "FAIL", reason, mark_failed=True,
+                          lookups=lookups, candidates=candidates)
 
         # merge_company_location() already re-ran the authoritative primary
         # rule after the last save, so its return value is the final row. The
@@ -854,25 +1003,31 @@ def run(task):
         primary = matched.get("primary") or next(
             (item.get("primary") for item in reversed(saved)
              if item.get("primary")), None)
+        primary_id = (primary or {}).get("_saved_location_id") or \
+            (primary or {}).get("id")
+        for item in candidates:
+            item["primary"] = bool(primary_id
+                                   and item.get("location_id") == primary_id)
+        if not any(item["primary"] for item in candidates):
+            for item in candidates:
+                if item.get("accepted"):
+                    item["primary"] = True
+                    break
         final = _status_from(primary, matched.get("status") or "APPROXIMATE")
         fields = (primary if primary and primary.get("address_line1") is not None
                   else matched.get("fields")) or {}
-        attempt["extracted"] = primary or matched.get("extracted")
-        attempt["checks"] = (matched.get("verdict") or {}).get("checks") or []
-        attempt["map"] = geo.result_summary(
-            (matched.get("verdict") or {}).get("result"))
         if review:
             attempt["review"] = sorted(set(review))
         notes.append("primary location: %s" % ((primary or {}).get("id") or "-"))
         notes.append("saved locations: %d of %d candidates"
-                     % (len(saved), len(ordered)))
+                     % (len(saved), len(batch)))
         address_cache.clear_failure(company, website)
         log.info("address: %s for %s (%d location(s))",
                  final, company, len(saved))
         return finish({"ok": True, "site": "address", "reason": final,
                        "address_status": final,
                        **_cache_fields(fields)},
-                      "PASS", final, lookups=lookups)
+                      "PASS", final, lookups=lookups, candidates=candidates)
     except Exception as exc:  # noqa: BLE001 - record then re-raise
         address_attempt.note(attempt, "%s: %s" % (type(exc).__name__, exc))
         address_attempt.finish(attempt, "FAIL", "unhandled_exception")

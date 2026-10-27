@@ -169,7 +169,7 @@ def test_trusted_source_state_contradiction_is_approximate_review():
     assert verdict["review_reasons"]
 
 
-def test_directory_state_contradiction_is_rejected():
+def test_directory_state_contradiction_is_approximate_review():
     verdict = geo.assess(
         _result(state="Andhra Pradesh", state_code="AP",
                 city="Vijayawada", postcode="520004",
@@ -178,8 +178,9 @@ def test_directory_state_contradiction_is_rejected():
         _expected(state="Andhra Pradesh", city="Vijayawada",
                   postal_code="520004"),
         area=(16.52, 80.66), source_type="DIRECTORY")
-    assert verdict["outcome"] == "rejected"
+    assert verdict["outcome"] == "approximate"
     assert verdict["reason"] == "state_mismatch"
+    assert "state_hint_conflict" in verdict["review_reasons"]
 
 
 def test_city_only_company_location_does_not_reject_correct_result():
@@ -195,8 +196,9 @@ def test_city_alias_resolves_to_state_for_hint_check():
     verdict = geo.assess(_result(), "Bangalore", _expected(),
                          area=(18.5, 73.8),
                          source_type="DIRECTORY")
-    assert verdict["outcome"] == "rejected"
+    assert verdict["outcome"] == "approximate"
     assert verdict["reason"] == "state_mismatch"
+    assert "state_hint_conflict" in verdict["review_reasons"]
 
 
 def test_assess_low_confidence_is_approximate():
@@ -232,8 +234,12 @@ def test_best_candidate_prefers_verified_then_distance():
 
 
 def test_lookup_queries_order_and_contents():
-    queries = geo.lookup_queries(_expected(
-        address_line1="10 MG Road", address_line2="Raheja Centre"))
+    expected = _expected(address_line1="10 MG Road",
+                         address_line2="Raheja Centre")
+    without_area = geo.lookup_queries(expected)
+    assert "landmark_city" not in [kind for kind, _ in without_area]
+
+    queries = geo.lookup_queries(expected, area=(18.5, 73.8))
     kinds = [kind for kind, _ in queries]
     assert kinds[:2] == ["full", "street_postcode"]
     assert "landmark_city" in kinds
@@ -243,6 +249,20 @@ def test_lookup_queries_order_and_contents():
     assert "Pune" in queries[-1][1]
     landmark = dict(queries)["landmark_city"]
     assert "Raheja Centre" in landmark and "Pune" in landmark
+
+
+def test_landmark_requires_name_overlap_and_two_km():
+    expected = _expected(address_line1="10 MG Road",
+                         address_line2="Raheja Centre")
+    near = _result(name="Raheja Centre", street="MG Road",
+                   lat=18.501, lon=73.8)
+    far = _result(name="Raheja Centre", street="MG Road",
+                  lat=18.6, lon=73.8)
+    unrelated = _result(name="Some Mall", street="MG Road",
+                        lat=18.501, lon=73.8)
+    assert geo.landmark_qualified(near, expected, (18.5, 73.8))
+    assert not geo.landmark_qualified(far, expected, (18.5, 73.8))
+    assert not geo.landmark_qualified(unrelated, expected, (18.5, 73.8))
 
 
 def test_geocode_many_requests_five_results(monkeypatch):
@@ -321,7 +341,7 @@ def test_best_candidate_prefers_street_pin_over_closer_city_centroid():
                               housenumber=None, lat=18.5, lon=73.8),
                       "Maharashtra", _expected(), area=(18.5, 73.8))
     assert city["pin_precision"] == "CITY"
-    assert street["pin_precision"] == "STREET"
+    assert street["pin_precision"] == "BUILDING"
     assert geo.best_candidate([city, street]) is street
 
 
@@ -344,20 +364,38 @@ def test_same_city_allows_known_metro_suburbs():
     assert not geo.same_city("Howrah", "Kolkata")
 
 
-def test_street_match_survives_a_wrong_pin_centroid_up_to_limit():
-    # Alpha Tech: Mani Casadona is ~33 km from the GeoNames 700160 centroid,
-    # but the postcode/city/street text all agree.
+def test_pin_area_corrects_wrong_geonames_centroid():
+    # Alpha Tech: the previous GeoNames 700160 centroid was ~33 km away from
+    # the real locality. The Geoapify PIN centre lands on the building.
     result = _result(city="New Town", state="West Bengal", state_code="WB",
-                     postcode="700160", street="Ecospace Seating Area Path2",
+                     postcode="700160", street="Mani Casadona",
                      housenumber="3WS3A", lat=22.5853, lon=88.4864,
                      rank={"confidence": 1.0, "match_type": "full_match"})
     expected = _expected(city="Kolkata", state="West Bengal",
                          postal_code="700160",
-                         address_line1="Mani Casadona, Action Area II-F")
+                         address_line1="3WS3A, Mani Casadona, Action Area II-F")
     verdict = geo.assess(result, "West Bengal", expected,
-                         area=(22.4656, 88.7803), source_type="OWN_SITE")
-    assert verdict["outcome"] == "approximate"
-    assert verdict["pin_precision"] == "STREET"
+                         area=(22.5855, 88.4866), area_kind="pin",
+                         source_type="OWN_SITE")
+    assert verdict["outcome"] == "verified"
+    assert verdict["pin_precision"] == "BUILDING"
+
+
+def test_city_anchor_allows_fifteen_km_but_pin_anchor_does_not():
+    result = _result(city="Kolkata", state="West Bengal", state_code="WB",
+                     postcode="700160", street="Mani Casadona",
+                     lat=22.60, lon=88.36)
+    expected = _expected(city="Kolkata", state="West Bengal",
+                         postal_code="700160",
+                         address_line1="Mani Casadona, Action Area II-F")
+    pin = geo.assess(result, "West Bengal", expected,
+                     area=(22.5855, 88.4866), area_kind="pin",
+                     source_type="OWN_SITE")
+    city = geo.assess(result, "West Bengal", expected,
+                      area=(22.5855, 88.4866), area_kind="city",
+                      source_type="OWN_SITE")
+    assert pin["reason"] == "area_mismatch"
+    assert city["outcome"] != "rejected"
 
 
 def test_city_level_result_far_from_area_is_rejected():
@@ -369,3 +407,37 @@ def test_city_level_result_far_from_area_is_rejected():
                          area=(22.4656, 88.7803), source_type="OWN_SITE")
     assert verdict["outcome"] == "rejected"
     assert verdict["reason"] == "area_mismatch"
+
+def test_precision_rules_use_match_quality():
+    expected = _expected(address_line1="10 MG Road")
+    building = _result(street="MG Road", housenumber="10",
+                       result_type="building")
+    no_house = _result(street="MG Road", housenumber=None,
+                       result_type="building")
+    wrong_street = _result(street="FC Road", housenumber="10",
+                           result_type="building")
+    street = _result(street="MG Road", housenumber=None,
+                     result_type="street")
+    amenity = _result(street="MG Road", housenumber=None,
+                      result_type="amenity")
+    low = _result(street="MG Road", housenumber="10",
+                  result_type="building",
+                  rank={"confidence": 0.2, "match_type": "full_match"})
+    city = _result(result_type="city", street=None, housenumber=None,
+                   city="Pune")
+    assert geo.result_precision(building, expected) == "BUILDING"
+    assert geo.result_precision(no_house, expected) == "STREET"
+    assert geo.result_precision(wrong_street, expected) == "AREA"
+    assert geo.result_precision(street, expected) == "STREET"
+    assert geo.result_precision(amenity, expected) == "AREA"
+    assert geo.result_precision(low, expected) == "AREA"
+    assert geo.result_precision(city, expected) == "CITY"
+
+
+def test_building_without_house_is_not_verified():
+    expected = _expected(address_line1="10 MG Road")
+    result = _result(street="MG Road", housenumber=None,
+                     result_type="building")
+    verdict = geo.assess(result, "Maharashtra", expected, area=(18.5, 73.8))
+    assert verdict["pin_precision"] == "STREET"
+    assert verdict["outcome"] == "approximate"

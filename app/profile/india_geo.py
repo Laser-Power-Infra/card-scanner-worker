@@ -74,11 +74,18 @@ STATE_ALIASES = {
 METRO_CITY = {
     "new town": "kolkata", "newtown": "kolkata", "rajarhat": "kolkata",
     "salt lake": "kolkata", "bidhannagar": "kolkata",
+    "calcutta": "kolkata",
     "madhapur": "hyderabad", "gachibowli": "hyderabad",
     "kondapur": "hyderabad", "hitech city": "hyderabad",
     "secunderabad": "hyderabad", "kukatpally": "hyderabad",
     "whitefield": "bengaluru", "electronic city": "bengaluru",
+    "bangalore": "bengaluru",
     "hinjewadi": "pune", "pimpri": "pune", "pimpri chinchwad": "pune",
+    "poona": "pune",
+    "ahmadabad": "ahmedabad",
+    "bombay": "mumbai",
+    "madras": "chennai",
+    "gurgaon": "gurugram",
 }
 
 # GST state code by state name.

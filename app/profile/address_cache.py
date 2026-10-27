@@ -26,7 +26,7 @@ SCOPE / LIMITS
 WHAT IS CACHED
     pages      cleaned pages + search URLs/provider, TTL 72h.
     failure    deterministic failure reason, TTL 12h. Transient failures
-               (budget, rate limit, network) are never reused.
+               (rate limit, network) are never reused.
     geocode    the full Geoapify result, including ``result_type``,
                ``match_type``, ``confidence`` and derived precision. The
                database LocationCache has no precision columns, so a cached
@@ -79,7 +79,6 @@ _REUSABLE_FAILURES = {
 }
 
 _TRANSIENT_FAILURES = {
-    "budget_exhausted",
     "rate_limit",
     "geocode_error",
     "unhandled_exception",

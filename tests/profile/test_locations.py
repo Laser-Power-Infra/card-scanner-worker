@@ -15,7 +15,7 @@ def _loc(**overrides):
         "longitude": 88.3,
         "source_type": "DIRECTORY",
         "status": "APPROXIMATE",
-        "precision": "STREET",
+        "precision": "BUILDING",
         "found_count": 1,
         "evidence_saved": True,
     }
@@ -62,7 +62,7 @@ def test_source_type_registry_and_directory():
 
 
 def test_precision_levels():
-    assert locations.precision({"address_line1": "12 Park Street"}) == "STREET"
+    assert locations.precision({"address_line1": "12 Park Street"}) == "AREA"
     assert locations.precision({"address_line2": "Park Street"}) == "AREA"
     assert locations.precision({"city": "Kolkata"}) == "CITY"
 
@@ -74,7 +74,7 @@ def test_build_location_marks_evidence():
         source_url="https://acme.example/contact", website="acme.example",
         status="VERIFIED")
     assert built["source_type"] == "OWN_SITE"
-    assert built["precision"] == "STREET"
+    assert built["precision"] == "AREA"
     assert built["status"] == "VERIFIED"
     assert built["evidence_saved"] is True
     assert built["source_urls"] == ["https://acme.example/contact"]
@@ -197,3 +197,32 @@ def test_merge_keeps_street_pin_when_new_candidate_is_coarser():
     assert merged["precision"] == "STREET"
     assert merged["latitude"] == 22.5
     assert merged["longitude"] == 88.3
+
+def test_verified_requires_building_precision_on_merge():
+    existing = _loc(precision="STREET", status="VERIFIED",
+                    source_urls=["https://acme.example/about"],
+                    source_type="OWN_SITE")
+    candidate = _loc(precision="STREET", status="APPROXIMATE",
+                     source_url="https://acmecorp.example/contact",
+                     source_type="OWN_SITE")
+    merged = locations.merge_details(existing, candidate)
+    assert merged["precision"] == "STREET"
+    assert merged["status"] == "APPROXIMATE"
+
+def test_build_location_maps_building_to_street_for_db_enum():
+    built = locations.build_location(
+        {"address_line1": "12 Park Street", "city": "Kolkata"},
+        pin_precision="BUILDING", status="VERIFIED")
+    assert built["precision"] == "STREET"
+    assert built["_precision_internal"] == "BUILDING"
+
+
+def test_merge_keeps_verified_building_after_db_roundtrip():
+    existing = _loc(precision="STREET", status="VERIFIED",
+                    _precision_internal="BUILDING",
+                    source_urls=["https://acme.example/about"])
+    candidate = _loc(precision="STREET", status="VERIFIED",
+                     _precision_internal="BUILDING")
+    merged = locations.merge_details(existing, candidate)
+    assert merged["status"] == "VERIFIED"
+    assert merged["_precision_internal"] == "BUILDING"

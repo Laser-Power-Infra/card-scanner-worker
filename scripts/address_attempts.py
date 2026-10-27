@@ -17,10 +17,11 @@ _START = re.compile(
     r"ADDRESS_ATTEMPT\s+(\S+)\s+\(contact\s+(.+?),\s*(.*)\)\s*$")
 # PowerShell wraps native stderr at console width, which can split the header
 # after the attempt id. Such a line has no "(contact ...)" part.
-_START_HEAD = re.compile(r"ADDRESS_ATTEMPT\s+(\S+)\s*$")
+_HEAD_ANY = re.compile(r"ADDRESS_ATTEMPT\s+(\S+)")
 _REASON = re.compile(r"^\s+reason\s+:\s*(\S+)")
 _OUTCOME = re.compile(r"^\s+outcome\s+:\s*(\S+)")
 _CHECK = re.compile(r"^\s+\[(PASS|FAIL)\]\s+([^:\s]+)")
+_CANDIDATE = re.compile(r"^\s+candidate\s+\d+/\d+\s*:")
 
 
 def _read_log(path):
@@ -40,6 +41,7 @@ def _record_from(start):
         "outcome": "-",
         "reason": "-",
         "failed": [],
+        "candidates": 0,
     }
 
 
@@ -59,12 +61,15 @@ def parse(lines):
             index += 1
             continue
 
-        head = _START_HEAD.search(line)
+        head = _HEAD_ANY.search(line)
         if head:
-            # Re-join a header split by PowerShell's line wrapping.
+            # Re-join a header split by PowerShell's line wrapping. It can break
+            # after the id or after "(contact", so try the full header first.
             header = line
             peek = index + 1
-            while peek < len(items) and peek <= index + 3 and ")" not in header:
+            while peek < len(items) and peek <= index + 3:
+                if _START.search(header):
+                    break
                 header += " " + items[peek].strip()
                 peek += 1
             joined = _START.search(header)
@@ -73,12 +78,21 @@ def parse(lines):
             else:
                 current = {"id": head.group(1), "contact": "?",
                            "company": "?", "outcome": "-", "reason": "-",
-                           "failed": []}
+                           "failed": [], "candidates": 0}
             records.append(current)
             index = peek
             continue
 
         if current is not None:
+            if _CANDIDATE.match(line):
+                current["candidates"] += 1
+                index += 1
+                continue
+            # Candidate sub-blocks repeat their own checks; do not fold them
+            # into the attempt-level failed-check counts.
+            if current["candidates"]:
+                index += 1
+                continue
             match = _REASON.match(line)
             if match:
                 current["reason"] = match.group(1)

@@ -43,7 +43,7 @@ def test_deterministic_failure_is_reused_and_transient_is_not():
     assert address_cache.load_failure("Acme")["reason"] == "postcode_mismatch"
 
     address_cache.clear("Acme")
-    address_cache.save_failure("Acme", "", "budget_exhausted", "c1")
+    address_cache.save_failure("Acme", "", "rate_limit", "c1")
     assert address_cache.load_failure("Acme") is None
 
 

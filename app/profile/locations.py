@@ -10,10 +10,10 @@ from urllib.parse import urlparse
 from .address_text import ADDRESS_KEYS as _ADDRESS_KEYS
 from .address_text import clean_address_fields
 from .address_text import norm
+from .geo import PRECISION_RANK
 
 SOURCE_TRUST = {"OWN_SITE": 3, "REGISTRY": 2, "DIRECTORY": 1, "MIGRATED": 0}
 STATUS_TRUST = {"VERIFIED": 2, "APPROXIMATE": 1}
-PRECISION_RANK = {"STREET": 3, "AREA": 2, "CITY": 1}
 
 TOLERANCE_M = 200
 _EARTH_RADIUS_M = 6371000.0
@@ -81,10 +81,12 @@ def source_type(evidence_url, website="", official_site=""):
 
 
 def precision(fields):
-    """STREET when there is a street line, AREA for a locality, else CITY."""
-    if norm((fields or {}).get("address_line1")):
-        return "STREET"
-    if norm((fields or {}).get("address_line2")):
+    """Fallback pin precision when no geocoder verdict is available.
+
+    An extracted street line is not proof that the saved pin is street-level,
+    so the fallback is never better than AREA.
+    """
+    if norm((fields or {}).get("address_line1")) or norm((fields or {}).get("address_line2")):
         return "AREA"
     return "CITY"
 
@@ -113,20 +115,27 @@ def hint_rank(location, company_location):
 
 def build_location(fields, *, source_url="", website="", official_site="",
                    status="APPROXIMATE", pin_precision=None):
-    """Turn extracted/geocoded fields into a CompanyLocation candidate."""
+    """Turn extracted/geocoded fields into a CompanyLocation candidate.
+
+    ``BUILDING`` is the new internal precision, but the database enum only has
+    STREET/AREA/CITY. Persist a building pin as STREET and keep the distinction
+    on the non-writable ``_precision_internal`` key until the enum is migrated.
+    """
     location = {key: (fields or {}).get(key) or "" for key in _ADDRESS_KEYS}
+    internal = pin_precision or precision(fields)
+    stored = "STREET" if internal == "BUILDING" else internal
     location.update({
         "latitude": (fields or {}).get("latitude"),
         "longitude": (fields or {}).get("longitude"),
         "source_url": source_url or "",
         "source_urls": [source_url] if source_url else [],
         "source_type": source_type(source_url, website, official_site),
-        "precision": (pin_precision
-                      or precision(fields)),
+        "precision": stored,
         "status": status,
         "evidence_saved": bool(source_url),
         "found_count": 1,
     })
+    location["_precision_internal"] = internal
     return location
 
 
@@ -145,8 +154,12 @@ def merge_details(existing, candidate):
     merged = {key: candidate.get(key) or "" for key in _ADDRESS_KEYS}
     existing_precision = existing.get("precision") or "CITY"
     candidate_precision = candidate.get("precision") or "CITY"
-    existing_rank = PRECISION_RANK.get(existing_precision, 0)
-    candidate_rank = PRECISION_RANK.get(candidate_precision, 0)
+    existing_internal = (existing.get("_precision_internal")
+                         or existing_precision)
+    candidate_internal = (candidate.get("_precision_internal")
+                          or candidate_precision)
+    existing_rank = PRECISION_RANK.get(existing_internal, 0)
+    candidate_rank = PRECISION_RANK.get(candidate_internal, 0)
     existing_source = existing.get("source_type") or "MIGRATED"
     candidate_source = candidate.get("source_type") or "DIRECTORY"
     # A better pin must replace a coarse one; otherwise a later run can never
@@ -192,21 +205,30 @@ def merge_details(existing, candidate):
     # relabel the row.
     merged["precision"] = (candidate_precision if take_candidate_pin
                            else existing_precision)
+    kept_internal = (candidate_internal if take_candidate_pin
+                     else existing_internal)
+    merged["_precision_internal"] = kept_internal
     merged["evidence_saved"] = bool(existing.get("evidence_saved")
                                     or candidate.get("evidence_saved"))
     merged["found_count"] = int(existing.get("found_count") or 1) + 1
 
     # Two independent sites agreeing upgrade an approximate row, but only when
-    # at least one of them is trusted (own site or registry) and they agree on
-    # the PIN. Two directories copying each other are not verification.
+    # at least one of them is trusted (own site or registry), they agree on the
+    # PIN, and the kept pin is actually building-level. Two directories copying
+    # each other are not verification, and a street/area pin is not either.
     trusted = (existing_source in _TRUSTED_SOURCES
                or candidate_source in _TRUSTED_SOURCES)
     pins = {re.sub(r"\D", "", str(row.get("postal_code") or ""))
             for row in (existing, candidate)}
     pins.discard("")
     if (trusted and len(distinct_sources(urls)) >= 2 and len(pins) <= 1
+            and kept_internal == "BUILDING"
             and merged["status"] != "VERIFIED"):
         merged["status"] = "VERIFIED"
+    # A VERIFIED label is only ever valid for a BUILDING pin. This also
+    # downgrades rows saved before the rule existed when they are next merged.
+    if merged["status"] == "VERIFIED" and kept_internal != "BUILDING":
+        merged["status"] = "APPROXIMATE"
     return merged
 
 
