@@ -34,7 +34,7 @@ def _conn():
     return shared_db.connect(_url())
 
 
-def _select(pass_name, limit, only_missing):
+def _select(pass_name, limit, only_missing, ids=None, company=None):
     conn = _conn()
     try:
         with conn.cursor() as cur:
@@ -43,6 +43,10 @@ def _select(pass_name, limit, only_missing):
                 if only_missing:
                     where.append("(e.address_verified_at IS NULL)")
                     where.append("(coalesce(e.address_attempts, 0) < %s)")
+                if ids:
+                    where.append("c.id = ANY(%s)")
+                if company:
+                    where.append('c.company ILIKE %s')
                 sql = (
                     'SELECT c.id, c."fullName", c."company", c."companyLocation", '
                     'c.website, c.emails '
@@ -55,27 +59,52 @@ def _select(pass_name, limit, only_missing):
                 params = []
                 if only_missing:
                     params.append(MAX_ADDRESS_ATTEMPTS)
+                if ids:
+                    params.append(list(ids))
+                if company:
+                    params.append("%" + company + "%")
                 params.append(limit)
                 cur.execute(sql, params)
             else:
+                where = ['coalesce(trim(c."company"), \'\') <> \'\'',
+                         "coalesce(e.status::text, '') <> 'DONE'"]
+                if ids:
+                    where.append("c.id = ANY(%s)")
+                if company:
+                    where.append('c.company ILIKE %s')
                 sql = (
                     'SELECT c.id, c."fullName", c."company", c."companyLocation", '
                     'c.website, c.emails '
                     'FROM "Contact" c '
                     'LEFT JOIN enrichment e ON e.contact_id = c.id '
-                    'WHERE coalesce(trim(c."company"), \'\') <> \'\' '
-                    'AND coalesce(e.status::text, \'\') <> \'DONE\' '
+                    'WHERE ' + " AND ".join(where) + ' '
                     'ORDER BY c."createdAt" DESC NULLS LAST '
                     'LIMIT %s'
                 )
-                cur.execute(sql, (limit,))
+                params = []
+                if ids:
+                    params.append(list(ids))
+                if company:
+                    params.append("%" + company + "%")
+                params.append(limit)
+                cur.execute(sql, params)
             rows = cur.fetchall()
             if rows and isinstance(rows[0], dict):
-                return [dict(r) for r in rows]
-            cols = [d[0] for d in cur.description]
-            return [dict(zip(cols, r)) for r in rows]
+                rows = [dict(r) for r in rows]
+            else:
+                cols = [d[0] for d in cur.description]
+                rows = [dict(zip(cols, r)) for r in rows]
     finally:
         conn.close()
+
+    if ids:
+        wanted = {str(item).strip() for item in ids if str(item).strip()}
+        rows = [row for row in rows if row.get("id") in wanted]
+    if company:
+        needle = company.lower()
+        rows = [row for row in rows
+                if needle in str(row.get("company") or "").lower()]
+    return rows
 
 
 def _snapshot(row):
@@ -119,7 +148,18 @@ def main():
     ap.add_argument("--dry-run", action="store_true")
     ap.add_argument("--only-missing", action="store_true")
     ap.add_argument("--inline", action="store_true")
+    ap.add_argument("--ids", help="comma-separated contact IDs to run")
+    ap.add_argument("--company", help="filter by company name fragment")
+    ap.add_argument("--no-cache", action="store_true",
+                    help="bypass the temporary address page/geocode cache")
     args = ap.parse_args()
+
+    if args.no_cache:
+        os.environ["ADDRESS_CACHE"] = "0"
+
+    ids = [item.strip() for item in (args.ids or "").split(",") if item.strip()]
+    if ids and args.limit < len(ids):
+        args.limit = len(ids)
 
     if args.pass_name == "address" and not db.address_schema_ok():
         print("address schema missing; apply the Prisma migration first")
@@ -128,8 +168,11 @@ def main():
     passes = ["address", "socials"] if args.pass_name == "all" else [args.pass_name]
 
     for p in passes:
-        only_missing = args.only_missing or (p == "address")
-        rows = _select(p, args.limit, only_missing)
+        # An explicit id list means "rerun exactly these" — do not silently
+        # skip contacts that already hit the attempt cap.
+        only_missing = args.only_missing or (p == "address" and not ids)
+        rows = _select(p, args.limit, only_missing, ids=ids,
+                       company=args.company)
         print("pass=%s selected=%d" % (p, len(rows)))
         if args.dry_run:
             for r in rows:

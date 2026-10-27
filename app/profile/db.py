@@ -242,8 +242,9 @@ def location_cache_schema_ok():
 
 _LOCATION_WRITABLE = {
     "address_line1", "address_line2", "city", "state", "postal_code",
-    "country", "latitude", "longitude", "source_url", "source_type",
-    "precision", "status", "is_primary", "evidence_saved", "found_count",
+    "country", "latitude", "longitude", "source_url", "source_urls",
+    "source_type", "precision", "status", "is_primary", "evidence_saved",
+    "found_count",
 }
 
 

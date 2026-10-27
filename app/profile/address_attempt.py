@@ -59,6 +59,7 @@ def start(contact_id, company="", company_location=""):
         "extracted": None,
         "map": None,
         "checks": [],
+        "lookups": [],
         "notes": [],
         "outcome": None,
         "reason": None,
@@ -86,7 +87,7 @@ def note(attempt, text):
 
 
 def finish(attempt, outcome, reason, *, pages=None, extracted=None,
-           map_result=None, checks=None, extra_notes=None):
+           map_result=None, checks=None, lookups=None, extra_notes=None):
     """Stamp and log one attempt. Idempotent: a second call is a no-op."""
     if attempt.get("logged"):
         return attempt
@@ -98,6 +99,8 @@ def finish(attempt, outcome, reason, *, pages=None, extracted=None,
         attempt["map"] = map_result
     if checks is not None:
         attempt["checks"] = list(checks)
+    if lookups is not None:
+        attempt["lookups"] = list(lookups)
     for text in extra_notes or ():
         note(attempt, text)
     attempt["outcome"] = "PASS" if str(outcome).lower() == "pass" else "FAIL"
@@ -141,12 +144,13 @@ def format_attempt(attempt):
     if mapped:
         lines.append(
             "  map       : %s | lat=%s lon=%s | type=%s | match=%s conf=%s "
-            "| place=%s" % (
+            "| precision=%s | place=%s" % (
                 _clean(mapped.get("formatted"), 200) or "-",
                 _val(mapped.get("lat")), _val(mapped.get("lon")),
                 _clean(mapped.get("resultType"), 60) or "-",
                 _clean(mapped.get("matchType"), 60) or "-",
                 _val(mapped.get("confidence")),
+                _clean(mapped.get("precision"), 20) or "-",
                 _clean(mapped.get("placeId"), 80) or "-"))
     else:
         lines.append("  map       : -")
@@ -160,8 +164,30 @@ def format_attempt(attempt):
             "PASS" if item.get("passed") else "FAIL",
             item.get("name") or "-", detail))
 
+    review = attempt.get("review") or []
+    if review:
+        lines.append("  review    : " + " ; ".join(
+            _clean(item, 120) for item in review))
+
     notes = attempt.get("notes") or []
     if notes:
         lines.append("  notes     : " + " ; ".join(
             _clean(n, 300) for n in notes))
+
+    lookups = attempt.get("lookups") or []
+    if lookups:
+        rendered = []
+        for item in lookups:
+            text = "%s:%s/%s" % (item.get("kind") or "-",
+                                 item.get("results", 0),
+                                 item.get("best") or "-")
+            if item.get("precision"):
+                text += "/%s" % item["precision"]
+            if item.get("distance_km") is not None:
+                text += "@%.1fkm" % float(item["distance_km"])
+            rendered.append(text)
+        lines.append("  lookups   : " + " | ".join(rendered))
+        worked = next((item.get("kind") for item in lookups
+                       if item.get("worked")), "-")
+        lines.append("              worked: %s" % worked)
     return "\n".join(lines)

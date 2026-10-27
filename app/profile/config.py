@@ -51,3 +51,21 @@ GEOAPIFY_USAGE_FILE = os.environ.get("GEOAPIFY_USAGE_FILE",
 GEOAPIFY_TIMEOUT = int(os.environ.get("GEOAPIFY_TIMEOUT", "20"))
 GEOAPIFY_MAX_ATTEMPTS = int(os.environ.get("GEOAPIFY_MAX_ATTEMPTS", "3"))
 ADDRESS_MODEL = os.environ.get("ADDRESS_MODEL", "")
+# Reasoning models reject `temperature`; set empty to omit it entirely.
+ADDRESS_TEMPERATURE = os.environ.get("ADDRESS_TEMPERATURE", "0")
+ADDRESS_MAX_OUTPUT_TOKENS = int(os.environ.get("ADDRESS_MAX_OUTPUT_TOKENS", "3000"))
+# How many distinct extracted offices to geocode/save per company.
+ADDRESS_MAX_LOCATIONS = int(os.environ.get("ADDRESS_MAX_LOCATIONS", "3"))
+
+# ── TEMPORARY CACHE — remove after the address overhaul ───────────────────
+# Local JSON only. It freezes pages/search results/geocode metadata long
+# enough to compare before/after runs without adding a database migration.
+# Delete app/profile/address_cache.py, these keys and data/address_cache/
+# once the overhaul is signed off. Set ADDRESS_CACHE=0 to bypass entirely.
+ADDRESS_CACHE = os.environ.get("ADDRESS_CACHE", "1")
+ADDRESS_CACHE_DIR = os.environ.get(
+    "ADDRESS_CACHE_DIR", "data/address_cache")
+ADDRESS_CACHE_TTL_HOURS = float(
+    os.environ.get("ADDRESS_CACHE_TTL_HOURS", "72"))
+ADDRESS_FAILURE_TTL_HOURS = float(
+    os.environ.get("ADDRESS_FAILURE_TTL_HOURS", "12"))

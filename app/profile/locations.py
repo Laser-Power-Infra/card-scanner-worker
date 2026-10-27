@@ -16,6 +16,25 @@ _EARTH_RADIUS_M = 6371000.0
 _ADDRESS_KEYS = ("address_line1", "address_line2", "city", "state",
                  "postal_code", "country")
 _REGISTRY_HINTS = ("gst", "mca", "lei", ".gov.in")
+_PO_BOX = re.compile(
+    r"(?:\bp\.?\s?o\.?\s*(?:box|bag)\b|"
+    r"\bpost\s*(?:box|bag)\b|"
+    r"\bp\.?\s?b\.?\s*(?:no|number)?\.?\s*\d+)", re.I)
+
+
+def clean_po_box(value):
+    """Drop PO box / post bag segments from one address line."""
+    segments = [segment.strip() for segment in str(value or "").split(",")]
+    return ", ".join(segment for segment in segments
+                     if segment and not _PO_BOX.search(segment))
+
+
+def clean_address_fields(fields):
+    cleaned = dict(fields or {})
+    for key in ("address_line1", "address_line2"):
+        if key in cleaned:
+            cleaned[key] = clean_po_box(cleaned[key])
+    return cleaned
 
 
 def norm(value):
@@ -77,8 +96,8 @@ def source_type(evidence_url, website="", official_site=""):
         own = _host(base)
         if own and host and (host == own or host.endswith("." + own)):
             return "OWN_SITE"
-    flat = host.replace("-", "")
-    if any(hint in flat for hint in _REGISTRY_HINTS):
+    haystack = ("%s %s" % (host, str(evidence_url or "").lower())).replace("-", "")
+    if any(hint in haystack for hint in _REGISTRY_HINTS):
         return "REGISTRY"
     return "DIRECTORY"
 
@@ -94,23 +113,43 @@ def precision(fields):
 
 def matches_hint(location, company_location):
     """True when the card's companyLocation text names this location."""
+    return hint_rank(location, company_location) > 0
+
+
+def hint_rank(location, company_location):
+    """Strength of the match between a location and the contact's own hint.
+
+    3 = city matches, 2 = state matches, 1 = a word overlaps, 0 = no match.
+    This is what keeps an out-of-state office from becoming primary when an
+    in-state office exists.
+    """
     hint = norm(company_location)
     if not hint:
-        return False
-    text = norm(" ".join(str(location.get(k) or "") for k in _ADDRESS_KEYS))
-    return bool(text) and hint in text
+        return 0
+    city = norm((location or {}).get("city"))
+    state = norm((location or {}).get("state"))
+    if city and (city in hint or hint in city):
+        return 3
+    if state and (state in hint or hint in state):
+        return 2
+    text = norm(" ".join(str((location or {}).get(k) or "")
+                         for k in _ADDRESS_KEYS))
+    tokens = [token for token in hint.split() if len(token) >= 4]
+    return 1 if any(token in text for token in tokens) else 0
 
 
 def build_location(fields, *, source_url="", website="", official_site="",
-                   status="APPROXIMATE"):
+                   status="APPROXIMATE", pin_precision=None):
     """Turn extracted/geocoded fields into a CompanyLocation candidate."""
     location = {key: (fields or {}).get(key) or "" for key in _ADDRESS_KEYS}
     location.update({
         "latitude": (fields or {}).get("latitude"),
         "longitude": (fields or {}).get("longitude"),
         "source_url": source_url or "",
+        "source_urls": [source_url] if source_url else [],
         "source_type": source_type(source_url, website, official_site),
-        "precision": precision(fields),
+        "precision": (pin_precision
+                      or precision(fields)),
         "status": status,
         "evidence_saved": bool(source_url),
         "found_count": 1,
@@ -118,19 +157,52 @@ def build_location(fields, *, source_url="", website="", official_site="",
     return location
 
 
+def distinct_sources(urls):
+    """Distinct non-empty source hosts, so two pages on one site count once."""
+    return {_host(url) for url in (urls or []) if _host(url)}
+
+
 def merge_details(existing, candidate):
     """Fold a repeat sighting into an existing row without losing detail."""
-    merged = {key: existing.get(key) or candidate.get(key)
-              for key in _ADDRESS_KEYS}
-    merged["latitude"] = (existing.get("latitude")
-                          if existing.get("latitude") is not None
-                          else candidate.get("latitude"))
-    merged["longitude"] = (existing.get("longitude")
-                           if existing.get("longitude") is not None
-                           else candidate.get("longitude"))
-
+    existing = clean_address_fields(existing)
+    candidate = clean_address_fields(candidate)
+    # The newest quote-validated extraction wins for address parts; the map
+    # only ever contributed coordinates. Empty means the new source had no
+    # second line, so do not resurrect an older one.
+    merged = {key: candidate.get(key) or "" for key in _ADDRESS_KEYS}
+    existing_precision = existing.get("precision") or "CITY"
+    candidate_precision = candidate.get("precision") or "CITY"
+    existing_rank = PRECISION_RANK.get(existing_precision, 0)
+    candidate_rank = PRECISION_RANK.get(candidate_precision, 0)
     existing_source = existing.get("source_type") or "MIGRATED"
     candidate_source = candidate.get("source_type") or "DIRECTORY"
+    # A better pin must replace a coarse one; otherwise a later run can never
+    # improve a city/area centroid into the street-level match it just found.
+    take_candidate_pin = (
+        candidate.get("latitude") is not None
+        and (existing.get("latitude") is None
+             or candidate_rank > existing_rank
+             or (candidate_rank == existing_rank
+                 and SOURCE_TRUST.get(candidate_source, 0)
+                 > SOURCE_TRUST.get(existing_source, 0))))
+    if take_candidate_pin:
+        merged["latitude"] = candidate.get("latitude")
+        merged["longitude"] = candidate.get("longitude")
+    else:
+        merged["latitude"] = (existing.get("latitude")
+                              if existing.get("latitude") is not None
+                              else candidate.get("latitude"))
+        merged["longitude"] = (existing.get("longitude")
+                               if existing.get("longitude") is not None
+                               else candidate.get("longitude"))
+
+    urls = []
+    for url in ((existing.get("source_urls") or [])
+                + [existing.get("source_url"), candidate.get("source_url")]):
+        if url and url not in urls:
+            urls.append(url)
+    merged["source_urls"] = urls
+
     if SOURCE_TRUST.get(candidate_source, 0) > SOURCE_TRUST.get(existing_source, 0):
         merged["source_type"] = candidate_source
         merged["source_url"] = candidate.get("source_url") or existing.get("source_url")
@@ -143,28 +215,36 @@ def merge_details(existing, candidate):
          candidate.get("status") or "APPROXIMATE"),
         key=lambda value: STATUS_TRUST.get(value, 0))
     merged["precision"] = max(
-        (existing.get("precision") or "CITY",
-         candidate.get("precision") or "CITY"),
+        (existing_precision, candidate_precision),
         key=lambda value: PRECISION_RANK.get(value, 0))
     merged["evidence_saved"] = bool(existing.get("evidence_saved")
                                     or candidate.get("evidence_saved"))
     merged["found_count"] = int(existing.get("found_count") or 1) + 1
+
+    # Two independent source sites agreeing on the same location upgrade it to
+    # verified even when the map match alone was weak.
+    if len(distinct_sources(urls)) >= 2:
+        merged["status"] = "VERIFIED"
     return merged
 
 
 def choose_primary(locations, company_location=None):
-    """Card match, then source trust, then times found; status/precision break
-    remaining ties so the result is deterministic."""
+    """Card match, then status/precision, then source trust and sightings.
+
+    The card hint stays first so a real branch in the contact's own state wins
+    over a head office in another state. Precision then keeps a street pin
+    ahead of a city centroid when both are otherwise equal.
+    """
     if not locations:
         return None
 
     def score(location):
         return (
-            1 if matches_hint(location, company_location) else 0,
-            SOURCE_TRUST.get(location.get("source_type"), 0),
-            int(location.get("found_count") or 1),
+            hint_rank(location, company_location),
             STATUS_TRUST.get(location.get("status"), 0),
             PRECISION_RANK.get(location.get("precision"), 0),
+            SOURCE_TRUST.get(location.get("source_type"), 0),
+            int(location.get("found_count") or 1),
         )
 
     return max(locations, key=score)

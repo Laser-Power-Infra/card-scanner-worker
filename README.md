@@ -89,6 +89,44 @@ python -m scripts.subsidiary_publish_sample "Example Cable Works" --publish
 python -m scripts.subsidiary_eval_thresholds
 ```
 
+## Address pass
+
+The address worker extracts company addresses from the company site and search
+results, then geocodes them. Useful rerun commands:
+
+```powershell
+# Rerun exactly the same contacts while comparing before/after behaviour
+python -m scripts.profile_enrich --pass address --inline --ids "id1,id2,id3"
+
+# Bypass the temporary cache for a clean live run
+python -m scripts.profile_enrich --pass address --inline --limit 20 --no-cache
+
+# Review approximate locations by pin precision
+python -m scripts.address_review --precision city
+```
+
+PIN state/district/city comes from `data/india_pins.json`, generated from the
+GeoNames India postal-code export (CC BY 4.0). Regenerate with:
+
+```powershell
+python -m scripts.build_pin_prefixes
+```
+
+### Temporary address cache
+
+`app/profile/address_cache.py` is a deliberate, disposable cache. It freezes
+cleaned pages, search URLs, deterministic failures and full geocode results
+under `data/address_cache/` for a few days so reruns can be compared on the
+same inputs.
+
+- `ADDRESS_CACHE=0` or `--no-cache` disables it.
+- Page TTL is 72h; failure TTL is 12h.
+- No raw HTML, no database table, no cross-machine guarantee.
+- Page text may contain emails/phones; the directory is gitignored.
+- **Removal:** after the address overhaul is signed off, delete
+  `app/profile/address_cache.py`, its call sites (grep `TEMPORARY CACHE`), the
+  `ADDRESS_CACHE_*` keys, its tests, this section, and `data/address_cache/`.
+
 ## Tests
 
 ```powershell
