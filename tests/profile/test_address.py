@@ -598,3 +598,24 @@ def test_state_hint_conflict_is_saved_with_review(monkeypatch, caplog):
     assert result["reason"] in ("approximate", "verified")
     assert writes["locations"]
     assert "state_hint_conflict" in caplog.text
+
+def test_lookup_requests_three_and_logs_scored_options(monkeypatch, caplog):
+    _wire(monkeypatch, caplog)
+    limits = []
+
+    def fake_geocode(query, limit=5, country_filter="in"):
+        limits.append(limit)
+        return [
+            _geo_result(),
+            _geo_result(street="Other Road", housenumber="99",
+                        result_type="street", lat=22.6),
+            _geo_result(result_type="city", street=None, housenumber=None),
+        ]
+
+    monkeypatch.setattr(address.geo, "geocode_many", fake_geocode)
+    result = _run()
+    assert result["reason"] == "verified"
+    assert limits and all(value == 3 for value in limits)
+    assert "full    :" in caplog.text
+    assert "/BUILDING " in caplog.text
+    assert caplog.text.count("/AREA ") >= 1

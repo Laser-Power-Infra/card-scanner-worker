@@ -675,11 +675,13 @@ def _process_address(contact_id, company, website, official_site,
         else:
             notes.append("cached result rejected; doing fresh lookups")
 
+    rejected = None
     if best is None:
         aborted = None
+        rejected = None
         for kind, query in geo.lookup_queries(extracted, area=area):
             try:
-                results = geo.geocode_many(query, limit=5,
+                results = geo.geocode_many(query, limit=3,
                                            country_filter=country_filter)
             except geo.GeoRateLimit as exc:
                 aborted = "rate_limit"
@@ -718,37 +720,62 @@ def _process_address(contact_id, company, website, official_site,
                         and verdict["pin_precision"] != "BUILDING"):
                     verdict["pin_precision"] = "AREA"
                 verdicts.append(verdict)
-            pick = geo.best_candidate(verdicts)
+            top = geo.best_candidate(verdicts)
+            threshold = (geo.AREA_SCORE_THRESHOLD if kind == "area_city"
+                         else geo.SCORE_THRESHOLD)
+            pick = geo.pick_candidate(verdicts, threshold)
+            options = [{
+                "score": verdict.get("score") or 0.0,
+                "outcome": verdict.get("outcome") or "rejected",
+                "precision": verdict.get("pin_precision") or "",
+                "distance_km": verdict.get("distance_km"),
+                "reason": verdict.get("reason") or "",
+                "formatted": (verdict.get("result") or {}).get("formatted") or "",
+                "result_type": (verdict.get("result") or {}).get("result_type") or "",
+            } for verdict in sorted(
+                verdicts, key=lambda item: item.get("score") or 0.0,
+                reverse=True)]
             lookups.append({
                 "kind": kind,
                 "query": query,
                 "results": len(results),
-                "best": pick["outcome"] if pick else "no_results",
+                "best": (pick["outcome"] if pick else
+                         "below_threshold" if verdicts else "no_results"),
                 "precision": pick.get("pin_precision") if pick else None,
                 "distance_km": pick.get("distance_km") if pick else None,
-                "reason": pick.get("reason") if pick else "no_results",
+                "reason": (pick.get("reason") if pick else
+                           (top or {}).get("reason") or "no_results"),
+                "threshold": threshold,
+                "options": options,
                 "worked": False,
             })
-            if (pick and pick["outcome"] == "rejected"
-                    and pick["reason"] in _PERMANENT_REASONS):
-                aborted = pick["reason"]
+            if top and (rejected is None
+                        or geo.best_candidate([rejected, top]) is top):
+                rejected = top
+            if (top and top["outcome"] == "rejected"
+                    and top["reason"] in _PERMANENT_REASONS):
+                aborted = top["reason"]
                 notes.append("%s lookup permanent failure: %s"
-                             % (kind, pick["reason"]))
+                             % (kind, top["reason"]))
                 break
-            if pick and (best is None or geo.best_candidate([best, pick]) is pick):
+            if not pick:
+                notes.append("%s: no result above score %.0f"
+                             % (kind, threshold))
+                continue
+            if best is None or geo.best_candidate([best, pick]) is pick:
                 best = pick
                 best_lookup = len(lookups) - 1
             # Stop once the candidate is verified or already street-level: the
             # remaining queries can only add coarse (CITY/AREA) duplicates and
             # each one costs a Geoapify call.
-            if best and (best["outcome"] == "verified"
-                         or best.get("pin_precision") in ("STREET", "BUILDING")):
+            if (best["outcome"] == "verified"
+                    or best.get("pin_precision") in ("STREET", "BUILDING")):
                 break
 
         if best_lookup is not None:
             lookups[best_lookup]["worked"] = True
 
-    rejected = None
+    rejected = rejected if best is None else None
     if best is not None and best["outcome"] not in ("verified", "approximate"):
         rejected = best
         best = None

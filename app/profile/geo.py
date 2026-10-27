@@ -20,6 +20,12 @@ GEOAPIFY_URL = "https://api.geoapify.com/v1/geocode/search"
 VERIFIED_KM = float(os.environ.get("ADDRESS_VERIFIED_KM", "3"))
 APPROXIMATE_KM = float(os.environ.get("ADDRESS_APPROXIMATE_KM", "10"))
 CITY_AREA_KM = float(os.environ.get("ADDRESS_CITY_AREA_KM", "15"))
+# A street/building result must clear this rule-based score before the ladder
+# stops. The area/city rung has a lower bar because it is the last resort before
+# the PIN/city anchor fallback.
+SCORE_THRESHOLD = float(os.environ.get("ADDRESS_SCORE_THRESHOLD", "50"))
+AREA_SCORE_THRESHOLD = float(os.environ.get("ADDRESS_AREA_SCORE_THRESHOLD", "30"))
+_TYPE_SCORE = {"BUILDING": 15, "STREET": 12, "AREA": 6, "CITY": 2}
 
 _WEAK_MATCHES = {
     "match_by_city_or_district",
@@ -93,12 +99,18 @@ def match_result(result, expected=None):
     street_present = bool(street)
     overlap = _street_overlap(street, expected_text)
     has_expected_street = bool(_normalize(expected_text))
+    expected_pin = re.sub(r"\D", "", str(expected.get("postal_code") or ""))
+    result_pin = re.sub(r"\D", "", str(result.get("postcode") or ""))
+    expected_city = _normalize(expected.get("city"))
     return {
         "street": street,
         "street_overlap": overlap,
         "street_mismatch": bool(has_expected_street
                                 and (not street_present or not overlap)),
         "house_match": _house_match(result.get("housenumber"), expected_text),
+        "pin_match": bool(expected_pin) and expected_pin == result_pin,
+        "city_match": bool(expected_city) and same_city(
+            expected_city, result.get("city")),
         "confidence": _confidence(result),
         "result_type": _normalize(result.get("result_type")),
         "match_type": _normalize((result.get("rank") or {}).get("match_type")),
@@ -145,9 +157,28 @@ def result_precision(result, expected=None):
     return "CITY"
 
 
+def _score_match(match, precision, distance):
+    """Explainable 0-110 score: text agreement first, distance as a penalty."""
+    score = 0.0
+    if match.get("street_overlap"):
+        score += 30
+    if match.get("house_match"):
+        score += 25
+    if match.get("pin_match"):
+        score += 15
+    if match.get("city_match"):
+        score += 10
+    score += _TYPE_SCORE.get(precision, 0)
+    if distance is not None:
+        score += max(0.0, 10.0 - float(distance) / 2.0)
+    score += 5.0 * float(match.get("confidence") or 0)
+    return round(score, 1)
+
+
 def match_score(result, expected=None, area=None):
     """Precision plus the components Step 4 scores candidates on."""
     match = match_result(result, expected)
+    precision = result_precision(result, expected)
     distance = None
     if result and area:
         try:
@@ -157,8 +188,9 @@ def match_score(result, expected=None, area=None):
             distance = None
     return {
         **match,
-        "precision": result_precision(result, expected),
+        "precision": precision,
         "distance_km": distance,
+        "score": _score_match(match, precision, distance),
     }
 
 
@@ -611,6 +643,7 @@ def assess(result, company_location=None, expected=None, *, area=None,
         "result": result,
         "pin_precision": precision,
         "match": match,
+        "score": _score_match(match, precision, distance),
         "review_reasons": [],
     }
 
@@ -676,25 +709,34 @@ def assess(result, company_location=None, expected=None, *, area=None,
 
 
 def best_candidate(verdicts):
-    """Pick the strongest result across a lookup's up-to-5 candidates.
+    """Pick the strongest result across one lookup's three candidates.
 
-    Precision sits before distance on purpose: a city centre 0 m from the area
-    anchor must not beat a real street pin 2 km away. That ordering bug was
-    why so many saves ended up using the area_city lookup.
+    The explainable text/distance score leads; outcome and precision only break
+    ties. This is the same rule Step 4 accepts, so a city centre 0 m from the
+    anchor cannot beat a real building 2 km away just because it is closer.
     """
     if not verdicts:
         return None
 
-    def score(verdict):
+    def rank(verdict):
         distance = verdict.get("distance_km")
         return (
+            verdict.get("score") or 0.0,
             OUTCOME_RANK.get(verdict.get("outcome"), 0),
             PRECISION_RANK.get(verdict.get("pin_precision"), 0),
             -(distance if distance is not None else 1e9),
             verdict.get("confidence") or 0,
         )
 
-    return max(verdicts, key=score)
+    return max(verdicts, key=rank)
+
+
+def pick_candidate(verdicts, threshold):
+    """Best non-rejected result that clears ``threshold``, or None."""
+    eligible = [verdict for verdict in verdicts or ()
+                if verdict.get("outcome") != "rejected"
+                and (verdict.get("score") or 0.0) >= threshold]
+    return best_candidate(eligible)
 
 
 def result_summary(result, expected=None):

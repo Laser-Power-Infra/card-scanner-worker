@@ -441,3 +441,30 @@ def test_building_without_house_is_not_verified():
     verdict = geo.assess(result, "Maharashtra", expected, area=(18.5, 73.8))
     assert verdict["pin_precision"] == "STREET"
     assert verdict["outcome"] == "approximate"
+
+def test_match_score_rewards_building_and_pin_over_area():
+    expected = _expected(address_line1="10 MG Road")
+    building = geo.match_score(
+        _result(street="MG Road", housenumber="10", result_type="building"),
+        expected, area=(18.5, 73.8))
+    area = geo.match_score(
+        _result(street=None, housenumber=None, result_type="postcode",
+                postcode="411001"), expected, area=(18.5, 73.8))
+    assert building["score"] > area["score"]
+    assert building["street_overlap"] and building["house_match"]
+    assert building["pin_match"] and building["city_match"]
+
+
+def test_pick_candidate_threshold_and_rejection():
+    expected = _expected(address_line1="10 MG Road")
+    good = geo.assess(
+        _result(street="MG Road", housenumber="10", result_type="building"),
+        "Maharashtra", expected, area=(18.5, 73.8))
+    weak = geo.assess(
+        _result(street=None, housenumber=None, result_type="city"),
+        "Maharashtra", expected, area=(18.5, 73.8))
+    rejected = geo.assess(
+        _result(postcode="999999", city="Mumbai"), "Maharashtra", expected,
+        area=(18.5, 73.8))
+    assert geo.pick_candidate([good, weak, rejected], 50) is good
+    assert geo.pick_candidate([weak, rejected], 50) is None

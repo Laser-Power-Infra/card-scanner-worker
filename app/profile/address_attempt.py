@@ -301,6 +301,23 @@ def format_attempt(attempt):
                         text += "@%.1fkm" % float(lookup["distance_km"])
                     rendered.append(text)
                 lines.append("    lookups   : " + " | ".join(rendered))
+                for lookup in item_lookups:
+                    options = lookup.get("options") or []
+                    if not options:
+                        continue
+                    rendered = []
+                    for option in options:
+                        distance = option.get("distance_km")
+                        rendered.append(
+                            "%.0f/%s/%s%s %s" % (
+                                option.get("score") or 0,
+                                option.get("outcome") or "-",
+                                option.get("precision") or "-",
+                                ("@%.1fkm" % distance
+                                 if distance is not None else ""),
+                                _clean(option.get("formatted"), 70) or "-"))
+                    lines.append("      %-8s: %s" % (
+                        lookup.get("kind") or "-", " | ".join(rendered)))
             distance = item.get("distance_km")
             lines.append(
                 "    verdict   : %s/%s | distance=%s | reason=%s | "
