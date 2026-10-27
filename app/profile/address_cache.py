@@ -83,6 +83,7 @@ _TRANSIENT_FAILURES = {
     "rate_limit",
     "geocode_error",
     "unhandled_exception",
+    "extraction_failed",
     "schema_missing",
     "no_company",
 }

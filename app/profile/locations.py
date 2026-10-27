@@ -7,40 +7,18 @@ import math
 import re
 from urllib.parse import urlparse
 
+from .address_text import ADDRESS_KEYS as _ADDRESS_KEYS
+from .address_text import clean_address_fields
+from .address_text import norm
+
 SOURCE_TRUST = {"OWN_SITE": 3, "REGISTRY": 2, "DIRECTORY": 1, "MIGRATED": 0}
 STATUS_TRUST = {"VERIFIED": 2, "APPROXIMATE": 1}
 PRECISION_RANK = {"STREET": 3, "AREA": 2, "CITY": 1}
 
 TOLERANCE_M = 200
 _EARTH_RADIUS_M = 6371000.0
-_ADDRESS_KEYS = ("address_line1", "address_line2", "city", "state",
-                 "postal_code", "country")
 _REGISTRY_HINTS = ("gst", "mca", "lei", ".gov.in")
-_PO_BOX = re.compile(
-    r"(?:\bp\.?\s?o\.?\s*(?:box|bag)\b|"
-    r"\bpost\s*(?:box|bag)\b|"
-    r"\bp\.?\s?b\.?\s*(?:no|number)?\.?\s*\d+)", re.I)
-
-
-def clean_po_box(value):
-    """Drop PO box / post bag segments from one address line."""
-    segments = [segment.strip() for segment in str(value or "").split(",")]
-    return ", ".join(segment for segment in segments
-                     if segment and not _PO_BOX.search(segment))
-
-
-def clean_address_fields(fields):
-    cleaned = dict(fields or {})
-    for key in ("address_line1", "address_line2"):
-        if key in cleaned:
-            cleaned[key] = clean_po_box(cleaned[key])
-    return cleaned
-
-
-def norm(value):
-    """Lowercase and strip punctuation so address text can be compared."""
-    text = re.sub(r"[^a-z0-9]+", " ", str(value or "").lower())
-    return " ".join(text.split())
+_TRUSTED_SOURCES = {"OWN_SITE", "REGISTRY"}
 
 
 def _coords(location):
@@ -109,11 +87,6 @@ def precision(fields):
     if norm((fields or {}).get("address_line2")):
         return "AREA"
     return "CITY"
-
-
-def matches_hint(location, company_location):
-    """True when the card's companyLocation text names this location."""
-    return hint_rank(location, company_location) > 0
 
 
 def hint_rank(location, company_location):
@@ -214,16 +187,25 @@ def merge_details(existing, candidate):
         (existing.get("status") or "APPROXIMATE",
          candidate.get("status") or "APPROXIMATE"),
         key=lambda value: STATUS_TRUST.get(value, 0))
-    merged["precision"] = max(
-        (existing_precision, candidate_precision),
-        key=lambda value: PRECISION_RANK.get(value, 0))
+    # Precision describes the pin that was actually kept: a candidate that only
+    # claims STREET while leaving the old city coordinates in place must not
+    # relabel the row.
+    merged["precision"] = (candidate_precision if take_candidate_pin
+                           else existing_precision)
     merged["evidence_saved"] = bool(existing.get("evidence_saved")
                                     or candidate.get("evidence_saved"))
     merged["found_count"] = int(existing.get("found_count") or 1) + 1
 
-    # Two independent source sites agreeing on the same location upgrade it to
-    # verified even when the map match alone was weak.
-    if len(distinct_sources(urls)) >= 2:
+    # Two independent sites agreeing upgrade an approximate row, but only when
+    # at least one of them is trusted (own site or registry) and they agree on
+    # the PIN. Two directories copying each other are not verification.
+    trusted = (existing_source in _TRUSTED_SOURCES
+               or candidate_source in _TRUSTED_SOURCES)
+    pins = {re.sub(r"\D", "", str(row.get("postal_code") or ""))
+            for row in (existing, candidate)}
+    pins.discard("")
+    if (trusted and len(distinct_sources(urls)) >= 2 and len(pins) <= 1
+            and merged["status"] != "VERIFIED"):
         merged["status"] = "VERIFIED"
     return merged
 

@@ -1,53 +1,144 @@
 """Address pass: verify a company's postal address via Geoapify geocoding."""
+import ipaddress
 import logging
+import socket
 from datetime import datetime, timedelta, timezone
+from urllib.parse import urljoin, urlparse
 
 import requests
 
 from ...shared import search as search_mod
 from .. import (address_ai, address_attempt, address_cache, address_fields,
                 budget, config, db, geo, locations, page_quality, pin_codes)
+from ..address_text import norm, norm_key, project
 
 log = logging.getLogger("card-desk.worker.address")
 
 
 def _normalize_address(fields):
-    parts = [fields.get("address_line1"), fields.get("address_line2"),
-             fields.get("city"), fields.get("state"),
-             fields.get("postal_code"), fields.get("country")]
-    return " ".join(" ".join(str(p or "").lower().split()) for p in parts).strip()
+    """Cache key for one address; punctuation-insensitive."""
+    return norm_key(" ".join(project(fields).values()))
 
 
 _CONTACT_PATHS = ("/contact", "/contact-us", "/contactus", "/about",
                   "/about-us", "/reach-us", "/locations")
 _MAX_FETCH_PAGES = 8
 _MAX_LLM_PAGES = 5
+_MAX_PAGE_BYTES = 1_500_000
+_MAX_REDIRECTS = 5
 
 # TEMPORARY CACHE — remove with app/profile/address_cache.py
 # Pages/search/geocode metadata are frozen locally for repeatable reruns.
 # This is deliberately not a database cache and has no cross-machine promise.
 
 
+def _public_host(url):
+    """True when ``url`` is http(s) and its host resolves only to public IPs.
+
+    The URL comes from a contact field, a search result, or an untrusted
+    sitemap, so this is the SSRF boundary: no loopback, private, link-local or
+    otherwise reserved address, and no local-only hostname.
+    """
+    try:
+        parsed = urlparse(str(url or "").strip())
+    except ValueError:
+        return False
+    if parsed.scheme not in ("http", "https"):
+        return False
+    host = (parsed.hostname or "").strip().lower()
+    if not host or host == "localhost" or host.endswith((".local", ".internal")):
+        return False
+    try:
+        infos = socket.getaddrinfo(host, parsed.port or (443 if parsed.scheme == "https" else 80))
+    except (socket.gaierror, UnicodeError, ValueError):
+        return False
+    for info in infos:
+        try:
+            address = ipaddress.ip_address(info[4][0])
+        except ValueError:
+            return False
+        if not address.is_global:
+            return False
+    return True
+
+
+def _get(url, *, binary=False):
+    """GET with redirect validation and a hard response-size cap.
+
+    Returns ``(response, body_bytes)`` or ``None``. Redirects are followed
+    manually so each hop is re-validated; ``requests`` would otherwise accept a
+    redirect into a private address after the first check.
+    """
+    current = url
+    for _ in range(_MAX_REDIRECTS + 1):
+        if not _public_host(current):
+            log.info("blocked fetch of non-public URL %s", current)
+            return None
+        try:
+            response = requests.get(
+                current, timeout=config.SCRAPE_TIMEOUT, stream=True,
+                allow_redirects=False,
+                headers={"User-Agent": config.USER_AGENT})
+        except requests.RequestException as exc:
+            log.info("fetch failed for %s: %s", current, type(exc).__name__)
+            return None
+        if response.is_redirect:
+            target = urljoin(current, response.headers.get("location") or "")
+            response.close()
+            if not target:
+                return None
+            current = target
+            continue
+        if not response.ok:
+            response.close()
+            return None
+        chunks, size = [], 0
+        try:
+            for chunk in response.iter_content(65536):
+                if not chunk:
+                    continue
+                size += len(chunk)
+                if size > _MAX_PAGE_BYTES:
+                    break
+                chunks.append(chunk)
+        except requests.RequestException as exc:
+            log.info("fetch read failed for %s: %s", current, type(exc).__name__)
+            response.close()
+            return None
+        finally:
+            response.close()
+        return response, b"".join(chunks)[:_MAX_PAGE_BYTES]
+    return None
+
+
+def _decode(response, body):
+    encoding = response.encoding
+    if encoding in (None, "ISO-8859-1"):
+        content_type = response.headers.get("content-type", "").lower()
+        marker = "charset="
+        if marker in content_type:
+            encoding = content_type.split(marker, 1)[1].split(";")[0].strip() or "utf-8"
+        else:
+            encoding = "utf-8"
+    try:
+        return body.decode(encoding or "utf-8", errors="replace")
+    except LookupError:
+        return body.decode("utf-8", errors="replace")
+
+
 def _fetch_page(url):
     """Fetch one HTML page, returning cleaned text and same-site links."""
-    try:
-        response = requests.get(url, timeout=config.SCRAPE_TIMEOUT,
-                                headers={"User-Agent": config.USER_AGENT})
-    except requests.RequestException as exc:
-        log.info("fetch failed for %s: %s", url, exc)
+    fetched = _get(url)
+    if not fetched:
         return None
-    if not response.ok:
-        return None
+    response, body = fetched
     content_type = response.headers.get("content-type", "").lower()
     if "html" not in content_type and "text/plain" not in content_type:
         return None
-    if response.encoding in (None, "ISO-8859-1"):
-        response.encoding = response.apparent_encoding or "utf-8"
-    html = response.text[:1000000]
+    html = _decode(response, body)[:1000000]
     text = page_quality.html_to_text(html)
     if not text:
         return None
-    from urllib.parse import urlparse
     return {
         "title": urlparse(response.url).path or "/",
         "url": response.url,
@@ -57,19 +148,16 @@ def _fetch_page(url):
 
 
 def _fetch_xml(url):
-    try:
-        response = requests.get(url, timeout=config.SCRAPE_TIMEOUT,
-                                headers={"User-Agent": config.USER_AGENT})
-    except requests.RequestException as exc:
-        log.info("sitemap fetch failed for %s: %s", url, exc)
+    fetched = _get(url)
+    if not fetched:
         return ""
-    if not response.ok:
-        return ""
-    return response.text[:500000]
+    response, body = fetched
+    return _decode(response, body)[:500000]
 
 
 def _sitemap_links(root):
     """Contact-like URLs from sitemap.xml, following one index level."""
+    root_host = (urlparse(root).hostname or "").lower()
     urls = []
     for path in ("/sitemap.xml", "/sitemap_index.xml"):
         xml = _fetch_xml(root.rstrip("/") + path)
@@ -78,10 +166,17 @@ def _sitemap_links(root):
             if found:
                 urls = found
                 break
-    for child in [url for url in urls if url.endswith(".xml")][:2]:
+
+    def same_site(candidate):
+        host = (urlparse(candidate).hostname or "").lower()
+        return bool(host and root_host
+                    and (host == root_host or host.endswith("." + root_host)))
+
+    children = [url for url in urls if url.endswith(".xml") and same_site(url)]
+    for child in children[:2]:
         urls.extend(page_quality.parse_sitemap(_fetch_xml(child)))
     return [url for url in urls
-            if page_quality.is_page_candidate_url(url)][:12]
+            if same_site(url) and page_quality.is_page_candidate_url(url)][:12]
 
 
 def _roots(website, official_site):
@@ -223,6 +318,21 @@ def _pages_for_ai(pages):
             for page in pages]
 
 
+def _extract(company, company_location, pages):
+    """Extraction result plus a failure kind, if the extractor itself failed.
+
+    "The pages have no address" and "our API key is wrong" must not collapse
+    into the same cacheable reason.
+    """
+    try:
+        return address_ai.extract_company_addresses(
+            company, company_location, _pages_for_ai(pages),
+            raise_on_error=True), None
+    except address_ai.ExtractionError as exc:
+        log.warning("address extraction failed (%s) for %s", exc.kind, company)
+        return [], exc.kind
+
+
 _TYPE_RANK = {"head_office": 0, "registered": 1, "branch": 2, "other": 3}
 _PERMANENT_REASONS = {"country_mismatch"}
 
@@ -281,19 +391,6 @@ def _valid_addresses(raw_addresses, pages, country_code="in",
     return valid, rejected
 
 
-def _pick_address(valid, website, official_site, company_location=""):
-    """Pick the primary candidate: card-hint first, then office type."""
-    def rank(address):
-        source = locations.source_type(
-            address.get("evidence_url") or "", website, official_site)
-        return (-locations.hint_rank(address, company_location),
-                _TYPE_RANK.get(address.get("address_type"), 3),
-                -locations.SOURCE_TRUST.get(source, 0),
-                -len(address.get("quote") or ""))
-
-    return min(valid, key=rank)
-
-
 def _note_candidates(attempt, valid, rejected, chosen=None):
     attempt["notes"].append("address candidates: valid=%d rejected=%d"
                             % (len(valid), len(rejected)))
@@ -323,8 +420,10 @@ def _save_location(contact_id, fields, extracted, website, official_site,
         website=website, official_site=official_site, status=status,
         pin_precision=pin_precision)
     primary = db.merge_company_location(contact_id, candidate, company_location)
+    # Only a verified result may fill the card-owned field, and only when the
+    # contact had no location at all.
     if (primary and not company_location and primary.get("city")
-            and not low_trust):
+            and not low_trust and status == "VERIFIED"):
         db.set_company_location_if_empty(
             contact_id, "%s, %s" % (primary["city"], primary.get("state") or ""))
     return primary
@@ -378,9 +477,7 @@ def _area_point(extracted, notes, country_filter="in"):
 
 def _fields_for(result, extracted):
     """Keep extracted parts; fill blanks from the map without overwriting."""
-    fields = {key: extracted.get(key) or "" for key in
-              ("address_line1", "address_line2", "city", "state",
-               "postal_code", "country")}
+    fields = project(extracted)
     if result:
         fields["latitude"] = result.get("lat")
         fields["longitude"] = result.get("lon")
@@ -402,9 +499,7 @@ def _status_from(primary, fallback):
 
 
 def _cache_fields(fields):
-    return {key: fields.get(key) or "" for key in
-            ("address_line1", "address_line2", "city", "state",
-             "postal_code", "country")}
+    return project(fields)
 
 
 def _load_contact(contact_id, snap):
@@ -519,7 +614,11 @@ def _process_address(contact_id, company, website, official_site,
             if pick and (best is None or geo.best_candidate([best, pick]) is pick):
                 best = pick
                 best_lookup = len(lookups) - 1
-            if best and best["outcome"] == "verified":
+            # Stop once the candidate is verified or already street-level: the
+            # remaining queries can only add coarse (CITY/AREA) duplicates and
+            # each one costs a Geoapify call.
+            if best and (best["outcome"] == "verified"
+                         or best.get("pin_precision") == "STREET"):
                 break
 
         if best_lookup is not None:
@@ -635,8 +734,15 @@ def run(task):
             return finish({"ok": False, "site": "address", "reason": "no_pages"},
                           "FAIL", "no_pages", mark_failed=True)
 
-        raw_addresses = address_ai.extract_company_addresses(
-            company, company_location, _pages_for_ai(pages))
+        raw_addresses, extraction_error = _extract(
+            company, company_location, pages)
+        if extraction_error:
+            # Transient/config failures are not the contact's fault and must
+            # not consume an attempt or poison the company-wide failure cache.
+            return finish({"ok": False, "site": "address",
+                           "reason": "extraction_failed"},
+                          "FAIL", "extraction_failed", mark_failed=False,
+                          extra_notes=["extraction error: %s" % extraction_error])
         country_filter = geo.country_filter_for(company_location, company)
         valid, rejected = _valid_addresses(raw_addresses, pages, country_filter,
                                            company_location)
@@ -656,8 +762,16 @@ def run(task):
                     address_attempt.page(p.get("url", ""), p.get("text", ""))
                     for p in pages]
                 address_cache.save_company(company, website, pages)
-                raw_addresses = address_ai.extract_company_addresses(
-                    company, company_location, _pages_for_ai(pages))
+                low_trust = any(page.get("company_trust") == "low"
+                                for page in pages)
+                raw_addresses, extraction_error = _extract(
+                    company, company_location, pages)
+                if extraction_error:
+                    return finish({"ok": False, "site": "address",
+                                   "reason": "extraction_failed"},
+                                  "FAIL", "extraction_failed", mark_failed=False,
+                                  extra_notes=["extraction error: %s"
+                                               % extraction_error])
                 valid, rejected = _valid_addresses(
                     raw_addresses, pages, country_filter, company_location)
 
@@ -665,8 +779,9 @@ def run(task):
             _note_candidates(attempt, valid, rejected)
             reason = "incomplete_extraction"
             rejected_reasons = {item for _, item in rejected}
-            for candidate in ("invalid_postcode", "state_mismatch",
-                              "country_mismatch", "no_street_line"):
+            for candidate in ("invalid_postcode", "country_mismatch",
+                              "no_street_line", "incomplete",
+                              "quote_not_found"):
                 if candidate in rejected_reasons:
                     reason = candidate
                     break
@@ -680,7 +795,16 @@ def run(task):
                                                  for address, reason in rejected]}},
                           "FAIL", reason, mark_failed=True)
 
-        ordered = _address_order(valid, company_location)
+        ordered, seen_addresses = [], set()
+        for address in _address_order(valid, company_location):
+            key = (norm(address.get("address_line1")),
+                   norm(address.get("postal_code")))
+            if key in seen_addresses:
+                attempt["notes"].append("duplicate candidate skipped: %s"
+                                        % (address.get("address_line1") or "-"))
+                continue
+            seen_addresses.add(key)
+            ordered.append(address)
         chosen = ordered[0] if ordered else None
         _note_candidates(attempt, valid, rejected, chosen)
         attempt["extracted"] = chosen
@@ -701,7 +825,10 @@ def run(task):
             if result:
                 saved.append(result)
                 review.extend(result.get("review") or [])
-                if result.get("extracted") is not address:
+                saved_key = (norm(result.get("fields", {}).get("address_line1")),
+                             norm(result.get("fields", {}).get("postal_code")))
+                if saved_key != (norm(address.get("address_line1")),
+                                 norm(address.get("postal_code"))):
                     notes.append("saved extra address: %s"
                                  % (address.get("address_line1") or "-"))
             else:
@@ -719,27 +846,17 @@ def run(task):
                           mark_failed=reason != "budget_exhausted",
                           lookups=lookups)
 
-        # Choose the primary locally as well as in the database. The DB rule is
-        # authoritative, but tests and multi-location saves need the same
-        # deterministic choice before the next location is merged.
-        local_candidates = [dict(item.get("fields") or {},
-                                 status=item.get("status"),
-                                 precision=item.get("precision"),
-                                 source_type=item.get("source_type"),
-                                 found_count=1)
-                            for item in saved]
-        local_primary = locations.choose_primary(local_candidates,
-                                                 company_location)
-        matched = saved[0]
-        for index, candidate in enumerate(local_candidates):
-            if candidate is local_primary:
-                matched = saved[index]
-                break
-        primary = matched.get("primary")
-        if primary is None:
-            primary = next((item.get("primary") for item in saved
-                            if item.get("primary")), None)
+        # merge_company_location() already re-ran the authoritative primary
+        # rule after the last save, so its return value is the final row. The
+        # old local re-selection could pick a different row (synthetic
+        # found_count=1) and then report one row's status with another's fields.
+        matched = saved[-1]
+        primary = matched.get("primary") or next(
+            (item.get("primary") for item in reversed(saved)
+             if item.get("primary")), None)
         final = _status_from(primary, matched.get("status") or "APPROXIMATE")
+        fields = (primary if primary and primary.get("address_line1") is not None
+                  else matched.get("fields")) or {}
         attempt["extracted"] = primary or matched.get("extracted")
         attempt["checks"] = (matched.get("verdict") or {}).get("checks") or []
         attempt["map"] = geo.result_summary(
@@ -754,7 +871,7 @@ def run(task):
                  final, company, len(saved))
         return finish({"ok": True, "site": "address", "reason": final,
                        "address_status": final,
-                       **_cache_fields(matched.get("fields") or {})},
+                       **_cache_fields(fields)},
                       "PASS", final, lookups=lookups)
     except Exception as exc:  # noqa: BLE001 - record then re-raise
         address_attempt.note(attempt, "%s: %s" % (type(exc).__name__, exc))

@@ -8,6 +8,9 @@ import logging
 import os
 import time
 from datetime import datetime, timezone
+from pathlib import Path
+
+from . import config
 
 log = logging.getLogger("card-desk.budget")
 
@@ -17,8 +20,17 @@ _STALE_LOCK_SECONDS = 30
 
 
 def _path(path=None):
-    return path or os.environ.get(
-        "GEOAPIFY_USAGE_FILE", "data/geoapify_usage.json")
+    """Resolve the usage file against the repo root, never the process CWD.
+
+    A relative default used to follow the working directory, so starting the
+    worker elsewhere silently reset the daily/monthly caps.
+    """
+    raw = (path or os.environ.get("GEOAPIFY_USAGE_FILE")
+           or config.GEOAPIFY_USAGE_FILE)
+    resolved = Path(raw)
+    if not resolved.is_absolute():
+        resolved = Path(__file__).resolve().parents[2] / resolved
+    return str(resolved)
 
 
 def _cap(cap=None):

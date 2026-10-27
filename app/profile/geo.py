@@ -6,7 +6,8 @@ import re
 
 import requests
 
-from . import pin_codes
+from . import india_geo, pin_codes
+from .address_text import norm as _normalize
 
 log = logging.getLogger("card-desk.geo")
 
@@ -73,7 +74,10 @@ def geocode_many(address, *, api_key=None, timeout=None, limit=5,
         response = requests.get(GEOAPIFY_URL, params=params,
                                 timeout=_timeout(timeout))
     except requests.RequestException as exc:
-        raise GeoTransient(str(exc))
+        # The request URL carries apiKey, and requests embeds it in the
+        # exception text. Never let that reach a log line.
+        log.info("geocode transport error: %s", type(exc).__name__)
+        raise GeoTransient("connection error")
     if response.status_code == 429:
         raise GeoRateLimit("HTTP 429")
     if response.status_code in (400, 401, 403):
@@ -83,15 +87,6 @@ def geocode_many(address, *, api_key=None, timeout=None, limit=5,
         raise GeoTransient("HTTP %d" % response.status_code)
     response.raise_for_status()
     return response.json().get("results") or []
-
-
-def geocode(address, *, api_key=None, timeout=None):
-    """Forward-geocode ``address`` restricted to India.
-
-    Returns the first result dict, or None when there are no matches.
-    Raises GeoConfigError / GeoRateLimit / GeoTransient on failure."""
-    results = geocode_many(address, api_key=api_key, timeout=timeout, limit=1)
-    return results[0] if results else None
 
 
 _INDIA_HINTS = (
@@ -157,32 +152,9 @@ def country_name_for(code):
     return _COUNTRY_NAMES.get(_normalize(code), "")
 
 
-def _normalize(text):
-    return " ".join(str(text or "").lower().split())
-
-
-# Suburbs that are administratively separate but part of the same metro for
-# address purposes. A "New Town" result is not a city contradiction with a
-# "Kolkata" contact.
-_CITY_METRO = {
-    "new town": "kolkata", "newtown": "kolkata", "rajarhat": "kolkata",
-    "salt lake": "kolkata", "bidhannagar": "kolkata",
-    "madhapur": "hyderabad", "gachibowli": "hyderabad",
-    "kondapur": "hyderabad", "hitech city": "hyderabad",
-    "secunderabad": "hyderabad", "kukatpally": "hyderabad",
-    "whitefield": "bengaluru", "electronic city": "bengaluru",
-    "hinjewadi": "pune", "pimpri": "pune", "pimpri chinchwad": "pune",
-}
-
-
-def _city_key(value):
-    key = _normalize(value)
-    return _CITY_METRO.get(key, key)
-
-
 def same_city(first, second):
     """Compare city names, allowing known metro/suburb aliases."""
-    a, b = _city_key(first), _city_key(second)
+    a, b = india_geo.metro_city(first), india_geo.metro_city(second)
     if not a or not b:
         return False
     return a == b or a in b or b in a
@@ -302,26 +274,38 @@ def check_all(result, company_location=None, expected=None, country_code="in"):
             "expected=%s | result=%s" % (exp_text or "-", street or "-"),
             "street_mismatch")
 
-    hint = _normalize(company_location)
-    if hint and expected_country == "in":
-        state = _normalize(result.get("state"))
+    # The card hint may name a city ("Hyderabad") or a state ("Telangana").
+    # Resolve it to a state before comparing; a hint that names no state at all
+    # must not contradict the result (that used to reject every correct
+    # city-only hint).
+    hint_state = india_geo.state_from_text(company_location)
+    if hint_state and expected_country == "in":
+        result_state = result.get("state") or ""
         state_code = _normalize(result.get("state_code"))
-        names = {n for n in (state, state_code) if n}
-        state_ok = bool(names) and (
-            hint in names or any(hint in n or n in hint for n in names))
+        names = {n for n in (_normalize(result_state), state_code) if n}
+        state_ok = (india_geo.states_equal(hint_state, result_state)
+                    or _normalize(hint_state) in names)
         add("state", state_ok,
-            "hint=%s | result=%s" % (hint, ",".join(sorted(names)) or "-"),
+            "hint=%s (%s) | result=%s" % (
+                _normalize(company_location), hint_state,
+                ",".join(sorted(names)) or "-"),
             "state_mismatch")
 
     return checks
 
 
-def decide(checks):
-    """First failed check wins, preserving the gate's original reason code."""
+def first_failure(checks):
+    """First failed check wins, preserving the gate's reason code."""
     for item in checks or ():
         if not item.get("passed"):
-            return False, item.get("reason") or item.get("name") or "rejected"
-    return True, "ok"
+            return item.get("reason") or item.get("name") or "rejected"
+    return "ok"
+
+
+def decide(checks):
+    """Backwards-compatible (ok, reason) pair over ``first_failure``."""
+    reason = first_failure(checks)
+    return reason == "ok", reason
 
 
 def accept(result, company_location=None, expected=None):
@@ -464,8 +448,7 @@ def assess(result, company_location=None, expected=None, *, area=None,
 
     failed = [item for item in checks if not item.get("passed")]
     failed_names = {item.get("name") for item in failed}
-    failed_reasons = [item.get("reason") for item in failed]
-    first_reason = failed[0].get("reason") if failed else "ok"
+    first_reason = first_failure(checks)
     has_street = bool(_normalize((expected or {}).get("address_line1")))
     precision = result_precision(result)
     trusted = source_type in _TRUSTED_SOURCES
@@ -590,30 +573,4 @@ def result_summary(result):
         "street": result.get("street") or "",
         "precision": result_precision(result),
         "postcodeValid": pin_codes.is_valid(postcode) if postcode else None,
-    }
-
-
-def extract_fields(result):
-    """Flatten a Geoapify result into the enrichment columns + cache fields."""
-    if not result:
-        return None
-    # Geoapify's address_line1 can be a POI name (hospital, mall); prefer the
-    # constructed street address so a building name never masquerades as one.
-    line1 = " ".join(p for p in (result.get("housenumber"),
-                                 result.get("street")) if p).strip()
-    if not line1:
-        line1 = result.get("address_line1") or ""
-    return {
-        "address_line1": line1,
-        "address_line2": (result.get("suburb")
-                          or result.get("district") or ""),
-        "city": (result.get("city") or result.get("district")
-                 or result.get("county") or ""),
-        "state": result.get("state") or "",
-        "postal_code": result.get("postcode") or "",
-        "country": result.get("country") or "",
-        "place_id": result.get("place_id"),
-        "latitude": result.get("lat"),
-        "longitude": result.get("lon"),
-        "formatted_address": result.get("formatted"),
     }

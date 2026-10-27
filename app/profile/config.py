@@ -56,6 +56,8 @@ ADDRESS_TEMPERATURE = os.environ.get("ADDRESS_TEMPERATURE", "0")
 ADDRESS_MAX_OUTPUT_TOKENS = int(os.environ.get("ADDRESS_MAX_OUTPUT_TOKENS", "3000"))
 # How many distinct extracted offices to geocode/save per company.
 ADDRESS_MAX_LOCATIONS = int(os.environ.get("ADDRESS_MAX_LOCATIONS", "3"))
+# How many failed address attempts before --only-missing skips a contact.
+ADDRESS_MAX_ATTEMPTS = int(os.environ.get("ADDRESS_MAX_ATTEMPTS", "3"))
 
 # ── TEMPORARY CACHE — remove after the address overhaul ───────────────────
 # Local JSON only. It freezes pages/search results/geocode metadata long

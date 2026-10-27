@@ -2,12 +2,12 @@
 import json
 import logging
 import os
-import re
 import time
 
 import requests
 
 from . import config
+from .address_text import clean_address_fields
 
 log = logging.getLogger("card-desk.address-ai")
 
@@ -19,10 +19,17 @@ ADDRESS_TYPES = ("head_office", "registered", "branch", "other")
 class PermanentExtractionError(RuntimeError):
     """4xx that retrying cannot fix (bad request, auth, model rejection)."""
 
-_PO_BOX = re.compile(
-    r"(?:\bp\.?\s?o\.?\s*(?:box|bag)\b|"
-    r"\bpost\s*(?:box|bag)\b|"
-    r"\bp\.?\s?b\.?\s*(?:no|number)?\.?\s*\d+)", re.I)
+
+class ExtractionError(RuntimeError):
+    """The extractor failed for a reason the caller must not cache.
+
+    ``kind`` is "permanent" (bad auth/request), "config" (no API key) or
+    "transient" (network/5xx after retries).
+    """
+
+    def __init__(self, kind, detail=""):
+        super().__init__(detail or kind)
+        self.kind = kind
 
 
 def _model(model=None):
@@ -173,21 +180,17 @@ def _call_once(company, company_location, pages, model, timeout):
 
 def strip_po_box(fields):
     """Remove PO box / post bag segments from the address lines."""
-    cleaned = dict(fields or {})
-
-    def strip_field(value):
-        segments = [segment.strip() for segment in str(value or "").split(",")]
-        return ", ".join(segment for segment in segments
-                         if segment and not _PO_BOX.search(segment))
-
-    cleaned["address_line1"] = strip_field(cleaned.get("address_line1"))
-    cleaned["address_line2"] = strip_field(cleaned.get("address_line2"))
-    return cleaned
+    return clean_address_fields(fields)
 
 
 def extract_company_addresses(company, company_location, pages, *,
-                              model=None, timeout=120, retries=2):
-    """Returns a list of address dicts (possibly empty) from the pages."""
+                              model=None, timeout=120, retries=2,
+                              raise_on_error=False):
+    """Returns a list of address dicts (possibly empty) from the pages.
+
+    ``raise_on_error`` distinguishes "the pages contain no address" from "the
+    extractor is broken" so the worker does not cache a transient failure.
+    """
     model = _model(model)
     last_error = None
     for attempt in range(retries + 1):
@@ -195,7 +198,18 @@ def extract_company_addresses(company, company_location, pages, *,
             return _call_once(company, company_location, pages, model, timeout)
         except PermanentExtractionError as exc:
             log.error("address extraction permanent failure: %s", str(exc)[:200])
+            if raise_on_error:
+                raise ExtractionError("permanent", str(exc)[:200])
             return []
+        except RuntimeError as exc:
+            if "API_KEY is missing" in str(exc):
+                log.error("address extraction misconfigured: %s", exc)
+                if raise_on_error:
+                    raise ExtractionError("config", str(exc))
+                return []
+            last_error = exc
+            if attempt < retries:
+                time.sleep(1)
         except Exception as exc:  # noqa: BLE001 - retry boundary
             last_error = exc
             log.warning("address extraction failed (attempt %d): %s",
@@ -203,11 +217,6 @@ def extract_company_addresses(company, company_location, pages, *,
             if attempt < retries:
                 time.sleep(1)
     log.error("address extraction gave up: %s", str(last_error)[:200])
+    if raise_on_error:
+        raise ExtractionError("transient", str(last_error)[:200])
     return []
-
-
-def extract_company_address(company, company_location, pages, **kwargs):
-    """Compatibility wrapper: the first extracted address, or None."""
-    addresses = extract_company_addresses(company, company_location, pages,
-                                          **kwargs)
-    return addresses[0] if addresses else None

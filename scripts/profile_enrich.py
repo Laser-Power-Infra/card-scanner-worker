@@ -4,11 +4,10 @@ Selects contacts from Postgres and either publishes tasks to the
 CS-profile:collection queue (default) or runs the handlers inline.
 """
 import argparse
+import json
 import logging
 import os
-import re
 
-import psycopg
 import pika
 
 from app.profile import budget, config, db, handlers
@@ -18,93 +17,47 @@ logging.basicConfig(level=logging.INFO,
                     format="%(asctime)s %(name)s %(levelname)s %(message)s")
 log = logging.getLogger("profile_enrich")
 
-MAX_ADDRESS_ATTEMPTS = 3
-
-
-def _url():
-    for line in open(os.path.join(os.path.dirname(__file__), "..", ".env"),
-                     encoding="utf-8"):
-        m = re.match(r"\s*DATABASE_URL\s*=\s*(.+)", line)
-        if m:
-            return m.group(1).strip().strip('"').strip("'")
-    return os.environ.get("DATABASE_URL", "")
-
-
 def _conn():
-    return shared_db.connect(_url())
+    return shared_db.connect(config.DATABASE_URL)
 
 
 def _select(pass_name, limit, only_missing, ids=None, company=None):
+    where = ['coalesce(trim(c."company"), \'\') <> \'\'']
+    params = []
+    if pass_name == "address":
+        if only_missing:
+            where.append("(e.address_verified_at IS NULL)")
+            where.append("(coalesce(e.address_attempts, 0) < %s)")
+            params.append(config.ADDRESS_MAX_ATTEMPTS)
+    else:
+        where.append("coalesce(e.status::text, \'\') <> 'DONE'")
+    if ids:
+        where.append("c.id = ANY(%s)")
+        params.append(list(ids))
+    if company:
+        where.append("c.company ILIKE %s")
+        params.append("%" + company + "%")
+    sql = (
+        'SELECT c.id, c."fullName", c."company", c."companyLocation", '
+        'c.website, c.emails '
+        'FROM "Contact" c '
+        'LEFT JOIN enrichment e ON e.contact_id = c.id '
+        'WHERE ' + " AND ".join(where) + ' '
+        'ORDER BY c."createdAt" DESC NULLS LAST '
+        'LIMIT %s'
+    )
+    params.append(limit)
     conn = _conn()
     try:
         with conn.cursor() as cur:
-            if pass_name == "address":
-                where = ['coalesce(trim(c."company"), \'\') <> \'\'']
-                if only_missing:
-                    where.append("(e.address_verified_at IS NULL)")
-                    where.append("(coalesce(e.address_attempts, 0) < %s)")
-                if ids:
-                    where.append("c.id = ANY(%s)")
-                if company:
-                    where.append('c.company ILIKE %s')
-                sql = (
-                    'SELECT c.id, c."fullName", c."company", c."companyLocation", '
-                    'c.website, c.emails '
-                    'FROM "Contact" c '
-                    'LEFT JOIN enrichment e ON e.contact_id = c.id '
-                    'WHERE ' + " AND ".join(where) + ' '
-                    'ORDER BY c."createdAt" DESC NULLS LAST '
-                    'LIMIT %s'
-                )
-                params = []
-                if only_missing:
-                    params.append(MAX_ADDRESS_ATTEMPTS)
-                if ids:
-                    params.append(list(ids))
-                if company:
-                    params.append("%" + company + "%")
-                params.append(limit)
-                cur.execute(sql, params)
-            else:
-                where = ['coalesce(trim(c."company"), \'\') <> \'\'',
-                         "coalesce(e.status::text, '') <> 'DONE'"]
-                if ids:
-                    where.append("c.id = ANY(%s)")
-                if company:
-                    where.append('c.company ILIKE %s')
-                sql = (
-                    'SELECT c.id, c."fullName", c."company", c."companyLocation", '
-                    'c.website, c.emails '
-                    'FROM "Contact" c '
-                    'LEFT JOIN enrichment e ON e.contact_id = c.id '
-                    'WHERE ' + " AND ".join(where) + ' '
-                    'ORDER BY c."createdAt" DESC NULLS LAST '
-                    'LIMIT %s'
-                )
-                params = []
-                if ids:
-                    params.append(list(ids))
-                if company:
-                    params.append("%" + company + "%")
-                params.append(limit)
-                cur.execute(sql, params)
+            cur.execute(sql, params)
             rows = cur.fetchall()
             if rows and isinstance(rows[0], dict):
-                rows = [dict(r) for r in rows]
-            else:
-                cols = [d[0] for d in cur.description]
-                rows = [dict(zip(cols, r)) for r in rows]
+                return [dict(row) for row in rows]
+            cols = [d[0] for d in cur.description]
+            return [dict(zip(cols, row)) for row in rows]
     finally:
         conn.close()
-
-    if ids:
-        wanted = {str(item).strip() for item in ids if str(item).strip()}
-        rows = [row for row in rows if row.get("id") in wanted]
-    if company:
-        needle = company.lower()
-        rows = [row for row in rows
-                if needle in str(row.get("company") or "").lower()]
-    return rows
 
 
 def _snapshot(row):
@@ -135,7 +88,7 @@ def _publish(payloads):
     ch.queue_declare(queue=config.QUEUE_PROFILE_COLLECTION, durable=True)
     for p in payloads:
         ch.basic_publish(exchange="", routing_key=config.QUEUE_PROFILE_COLLECTION,
-                         body=__import__("json").dumps(p),
+                         body=json.dumps(p),
                          properties=pika.BasicProperties(delivery_mode=2))
     conn.close()
 

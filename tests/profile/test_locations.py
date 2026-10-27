@@ -106,14 +106,31 @@ def test_merge_cleans_po_box_and_uses_latest_parts():
     assert merged["address_line2"] == ""
 
 
-def test_two_distinct_sources_upgrade_to_verified():
-    existing = _loc(source_urls=["https://directory.example/acme"],
-                    source_type="DIRECTORY", status="APPROXIMATE")
-    candidate = _loc(source_url="https://acme.example/contact",
-                     source_type="DIRECTORY", status="APPROXIMATE")
+def test_trusted_second_source_upgrades_to_verified():
+    existing = _loc(source_urls=["https://acme.example/about"],
+                    source_type="OWN_SITE", status="APPROXIMATE")
+    candidate = _loc(source_url="https://acmecorp.example/contact",
+                     source_type="OWN_SITE", status="APPROXIMATE")
     merged = locations.merge_details(existing, candidate)
     assert merged["status"] == "VERIFIED"
     assert len(merged["source_urls"]) == 2
+
+
+def test_two_directories_do_not_upgrade_to_verified():
+    existing = _loc(source_urls=["https://directory.example/acme"],
+                    source_type="DIRECTORY", status="APPROXIMATE")
+    candidate = _loc(source_url="https://other-directory.example/acme",
+                     source_type="DIRECTORY", status="APPROXIMATE")
+    merged = locations.merge_details(existing, candidate)
+    assert merged["status"] == "APPROXIMATE"
+
+
+def test_precision_follows_the_pin_actually_kept():
+    existing = _loc(precision="CITY")
+    candidate = _loc(precision="STREET", latitude=None, longitude=None,
+                     address_line1="99 Other Road")
+    merged = locations.merge_details(existing, candidate)
+    assert merged["precision"] == "CITY"
 
 
 def test_same_host_does_not_upgrade():

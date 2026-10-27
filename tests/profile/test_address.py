@@ -201,10 +201,24 @@ def test_quote_not_on_page_is_rejected(monkeypatch, caplog):
     extracted = dict(_EXTRACTED, quote="this sentence is not on the page")
     writes = _wire(monkeypatch, caplog, extracted=extracted)
     result = _run()
-    assert result["reason"] == "incomplete_extraction"
+    assert result["reason"] == "quote_not_found"
     assert result["data"]["rejected"][0]["reason"] == "quote_not_found"
     assert writes["locations"] == []
     assert writes["failed"] == 1
+
+
+def test_extraction_failure_is_not_cached_or_counted(monkeypatch, caplog):
+    writes = _wire(monkeypatch, caplog)
+
+    def boom(*args, **kwargs):
+        raise address.address_ai.ExtractionError("permanent", "401")
+
+    monkeypatch.setattr(address.address_ai,
+                        "extract_company_addresses", boom)
+    result = _run()
+    assert result["reason"] == "extraction_failed"
+    assert writes["failed"] == 0
+    assert writes["locations"] == []
 
 
 def test_head_office_preferred_over_branch(monkeypatch, caplog):

@@ -95,8 +95,16 @@ def test_page_relevance_rejects_similar_company_name():
         "https://tracxn.com/as-fabtech",
         "A.S. FABTECH (INDIA) PRIVATE LIMITED company profile. "
         "Kolkata, West Bengal, India.")
-    assert not page_quality.page_matches_company(
-        as_fabtech, "Fab Tech India Impex", "West Bengal")
+    assert page_quality.company_match(
+        as_fabtech, "Fab Tech India Impex", "West Bengal")[0] not in ("high", "medium")
+
+
+def test_short_name_word_does_not_match_unrelated_host():
+    # "air" is a substring of "fairdealdirectory" but not a host label.
+    page = _page("https://www.fairdealdirectory.in/contact",
+                 "Our office details and phone numbers.")
+    assert page_quality.company_match(
+        page, "Air India", "Kolkata")[0] not in ("high", "medium")
 
 
 def test_page_relevance_accepts_exact_company_and_city():
@@ -104,15 +112,15 @@ def test_page_relevance_accepts_exact_company_and_city():
         "https://www.figmentglobal.com/fab-tech-india-impex",
         "Fab Tech India Impex GST number 19AAGFF3119B1ZU. "
         "North Twenty Four Parganas, West Bengal, India.")
-    assert page_quality.page_matches_company(
-        correct, "Fab Tech India Impex", "West Bengal")
+    assert page_quality.company_match(
+        correct, "Fab Tech India Impex", "West Bengal")[0] in ("high", "medium")
 
 
 def test_page_relevance_accepts_gstin_prefix():
     page = _page("https://example.com/x",
                  "Fab Tech India Impex GSTIN 19AAGFF3119B1ZU")
-    assert page_quality.page_matches_company(
-        page, "Fab Tech India Impex", "West Bengal")
+    assert page_quality.company_match(
+        page, "Fab Tech India Impex", "West Bengal")[0] in ("high", "medium")
 
 
 def test_select_pages_order_is_deterministic():

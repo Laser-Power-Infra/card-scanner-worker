@@ -7,5 +7,6 @@ __pycache__/
 data/geoapify_usage.json
 data/geoapify_usage.json.lock
 data/geoapify_usage.json.tmp
-# TEMPORARY CACHE — delete with app/profile/address_cache.py
 data/address_cache/
+data/*.log
+.planning/

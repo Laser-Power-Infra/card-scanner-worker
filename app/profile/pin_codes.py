@@ -90,15 +90,3 @@ def states():
     return list(_load().get("states") or [])
 
 
-def cities():
-    return list(_load().get("cities") or [])
-
-
-def state_names():
-    """Normalized state names for page-context matching."""
-    return [_normalize(name) for name in states() if name]
-
-
-def _normalize(value):
-    text = re.sub(r"[^a-z0-9]+", " ", str(value or "").lower())
-    return " ".join(text.split())

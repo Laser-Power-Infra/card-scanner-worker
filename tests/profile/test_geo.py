@@ -182,6 +182,23 @@ def test_directory_state_contradiction_is_rejected():
     assert verdict["reason"] == "state_mismatch"
 
 
+def test_city_only_company_location_does_not_reject_correct_result():
+    # A card that says "Pune" (a city) used to fail the state hint check and
+    # reject a perfect result with state_mismatch.
+    verdict = geo.assess(_result(), "Pune", _expected(),
+                         area=(18.5, 73.8), source_type="DIRECTORY")
+    assert verdict["outcome"] == "verified"
+    assert verdict["reason"] == "ok"
+
+
+def test_city_alias_resolves_to_state_for_hint_check():
+    verdict = geo.assess(_result(), "Bangalore", _expected(),
+                         area=(18.5, 73.8),
+                         source_type="DIRECTORY")
+    assert verdict["outcome"] == "rejected"
+    assert verdict["reason"] == "state_mismatch"
+
+
 def test_assess_low_confidence_is_approximate():
     verdict = geo.assess(
         _result(rank={"confidence": 0.2, "match_type": "full_match"}),
@@ -287,23 +304,6 @@ def test_international_country_check_uses_expected_code():
     checks_in = geo.check_all(result, "Dubai", _expected(), country_code="in")
     country = [item for item in checks_in if item["name"] == "country"][0]
     assert country["passed"] is False
-
-
-def test_extract_prefers_street_address_over_poi_name():
-    fields = geo.extract_fields(_result(address_line1="Some Hospital"))
-    assert fields["address_line1"] == "10 MG Road"
-
-
-def test_extract_fields_flattens():
-    fields = geo.extract_fields(_result())
-    assert fields["address_line1"] == "10 MG Road"
-    assert fields["city"] == "Pune"
-    assert fields["state"] == "Maharashtra"
-    assert fields["postal_code"] == "411001"
-    assert fields["country"] == "India"
-    assert fields["latitude"] == 18.5
-    assert fields["longitude"] == 73.8
-    assert fields["place_id"] == "pid"
 
 
 def test_result_precision_uses_geocoder_result_not_extracted_street():

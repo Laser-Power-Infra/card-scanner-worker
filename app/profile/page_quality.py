@@ -10,6 +10,10 @@ from html import unescape
 from html.parser import HTMLParser
 from urllib.parse import urljoin, urlparse
 
+from . import india_geo
+from .address_text import compact as _compact
+from .address_text import norm as _normalize_quote
+
 ADDRESS_HINT = re.compile(
     r"\b(address|registered office|corporate office|head office|"
     r"headquarter|h\.?q\.?)\b", re.I)
@@ -46,29 +50,6 @@ _GENERIC_NAME_WORDS = {
     "pvt", "private", "ltd", "limited", "llp", "inc", "incorporated", "india",
     "indian", "the", "and", "of", "co", "company", "corporation", "corp",
     "opc", "plc", "govt", "government", "department", "directorate",
-}
-_STATE_GST_PREFIX = {
-    "west bengal": "19", "telangana": "36", "maharashtra": "27",
-    "karnataka": "29", "tamil nadu": "33", "delhi": "07", "gujarat": "24",
-    "uttar pradesh": "09", "andhra pradesh": "37", "rajasthan": "08",
-    "madhya pradesh": "23", "haryana": "06", "punjab": "03", "kerala": "32",
-    "odisha": "21", "bihar": "10", "jharkhand": "20", "assam": "18",
-    "chhattisgarh": "22", "goa": "30", "uttarakhand": "05",
-    "himachal pradesh": "02", "jammu and kashmir": "01",
-    "chandigarh": "04",
-}
-_CITY_GST_PREFIX = {
-    "hyderabad": "36", "secunderabad": "36", "kolkata": "19",
-    "mumbai": "27", "pune": "27", "chennai": "33", "bengaluru": "29",
-    "bangalore": "29", "new delhi": "07", "delhi": "07",
-    "ahmedabad": "24", "jaipur": "08", "lucknow": "09", "gurugram": "06",
-    "noida": "09", "kochi": "32", "coimbatore": "33", "indore": "23",
-    "bhopal": "23", "patna": "10", "ranchi": "20", "guwahati": "18",
-    "chandigarh": "04", "visakhapatnam": "37", "vijayawada": "37",
-    "nagpur": "27", "surat": "24", "vadodara": "24", "ludhiana": "03",
-    "amritsar": "03", "dehradun": "05", "shimla": "02", "srinagar": "01",
-    "bhubaneswar": "21", "raipur": "22", "panaji": "30",
-    "thiruvananthapuram": "32",
 }
 
 
@@ -270,10 +251,6 @@ def select_pages(pages, company="", company_location="", limit=5):
     return kept[:limit]
 
 
-def _compact(text):
-    return re.sub(r"[^a-z0-9]+", "", str(text or "").lower())
-
-
 def company_tokens(company, company_location=""):
     """Distinctive name words after dropping legal suffixes, 'India', and
     state/city words supplied by the card. Location words belong to the
@@ -289,10 +266,6 @@ def company_tokens(company, company_location=""):
     return [word for word in words
             if len(word) >= 3 and word not in generic
             and word not in location_words]
-
-
-def core_phrase(company, company_location=""):
-    return " ".join(company_tokens(company, company_location))
 
 
 def _location_match(text, company_location):
@@ -321,10 +294,8 @@ def _location_match(text, company_location):
     prefixes = {gstin[:2] for gstin in _GSTIN.findall(text.upper())}
     if not prefixes:
         return False
-    expected = {prefix for name, prefix in
-                {**_STATE_GST_PREFIX, **_CITY_GST_PREFIX}.items()
-                if name in location}
-    return bool(expected & prefixes)
+    expected = india_geo.gst_prefix_for(location)
+    return bool(expected and expected in prefixes)
 
 
 def company_match(page, company, company_location="", website=""):
@@ -359,9 +330,19 @@ def company_match(page, company, company_location="", website=""):
     # Domain match uses the page's own host, not the contact's website field:
     # a directory page about another company must not become high-trust just
     # because we know the contact's domain.
+    # Match a host label, never a substring of one: "air" must not make
+    # fairdealdirectory.in look like Air India. Require at least four
+    # characters so short generic words cannot match.
     host = _compact(urlparse(str(page.get("url") or "")).hostname or "")
-    if host and compact_phrase and (compact_phrase in host
-                                    or _compact(tokens[0]) in host):
+    labels = {_compact(part) for part in
+              (urlparse(str(page.get("url") or "")).hostname or "").lower().split(".")
+              if part}
+    if host and compact_phrase and (
+            compact_phrase in labels
+            or any(len(_compact(token)) >= 4
+                   and (_compact(token) in labels
+                        or any(_compact(token) in label for label in labels))
+                   for token in tokens)):
         return "high", ["domain"]
 
     hits = [token for token in tokens
@@ -377,16 +358,6 @@ def company_match(page, company, company_location="", website=""):
         reasons.append("location_only")
         return "low", reasons
     return "none", ["no_name_or_location"]
-
-
-def page_matches_company(page, company, company_location=""):
-    """Strict compatibility wrapper: only high/medium pages count as a match."""
-    tier, _ = company_match(page, company, company_location)
-    return tier in ("high", "medium")
-
-
-def _normalize_quote(text):
-    return " ".join(re.sub(r"[^a-z0-9]+", " ", str(text or "").lower()).split())
 
 
 def quote_in_page(quote, page_text):

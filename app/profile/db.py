@@ -308,7 +308,11 @@ def set_primary_location(contact_id, location, verified_at=None):
     _run(
         'UPDATE enrichment SET address_line1 = %s, address_line2 = %s, '
         'city = %s, state = %s, postal_code = %s, country = %s, '
-        'address_verified_at = %s, updated_at = now() WHERE contact_id = %s',
+        # Monotonic: an approximate primary must not erase an earlier
+        # verification, or the contact re-enters the --only-missing queue
+        # forever and is re-geocoded on every run.
+        'address_verified_at = COALESCE(%s, address_verified_at), '
+        'updated_at = now() WHERE contact_id = %s',
         (location.get("address_line1") or "",
          location.get("address_line2") or "",
          location.get("city") or "",
@@ -367,7 +371,8 @@ def get_location_cache(normalized_query):
         return _fetchone(
             'SELECT "placeId", latitude, longitude, "formattedAddress", '
             'country, state, "expiresAt", resolved '
-            'FROM "LocationCache" WHERE "normalizedQuery" = %s', (normalized_query,))
+            'FROM "LocationCache" WHERE "normalizedQuery" = %s '
+            'AND ("expiresAt" IS NULL OR "expiresAt" > now())', (normalized_query,))
     except Exception:
         return None
 
