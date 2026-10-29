@@ -2,6 +2,7 @@
 import json
 import logging
 import os
+import re
 import time
 
 import requests
@@ -158,10 +159,7 @@ def _call_once(company, company_location, pages, model, timeout):
                 raw += block["text"]
     if not raw:
         raise RuntimeError("empty model output")
-    start, end = raw.find("{"), raw.rfind("}")
-    if start < 0 or end <= start:
-        raise RuntimeError("no JSON object in model output")
-    data = json.loads(raw[start:end + 1])
+    data = _loads_json(raw)
 
     addresses = []
     for entry in data.get("addresses") or []:
@@ -176,6 +174,87 @@ def _call_once(company, company_location, pages, model, timeout):
                                    else "other")
         addresses.append(cleaned)
     return addresses
+
+
+def _is_string_end(text, index):
+    """True when the quote at ``index`` really closes a JSON string.
+
+    Looks past the quote to the next structural token. A value only ends at
+    ``}``/``]`` or at a comma followed by another known key (or a new object).
+    """
+    peek = index + 1
+    while peek < len(text) and text[peek] in " \t\r\n":
+        peek += 1
+    if peek >= len(text):
+        return True
+    char = text[peek]
+    if char in ":}]":
+        return True
+    if char != ",":
+        return False
+    peek += 1
+    while peek < len(text) and text[peek] in " \t\r\n":
+        peek += 1
+    if peek >= len(text):
+        return True
+    char = text[peek]
+    if char in "{]}":
+        return True
+    if char != '"':
+        return False
+    match = re.match(r'"([A-Za-z0-9_]+)"\s*:', text[peek:])
+    return bool(match)
+
+
+def _repair_json_quotes(text):
+    """Escape unescaped inner quotes and raw controls in JSON strings.
+
+    The model copies quoted address text (for example ``Shed "A", ...``)
+    straight into a string value. Such a quote is only a string terminator
+    when the next structural token says so; see ``_is_string_end``.
+    """
+    out = []
+    in_string = False
+    escaped = False
+    controls = {"\n": "\\n", "\r": "\\r", "\t": "\\t"}
+    for index, char in enumerate(text):
+        if not in_string:
+            if char == '"':
+                in_string = True
+            out.append(char)
+            continue
+        if escaped:
+            out.append(char)
+            escaped = False
+            continue
+        if char == "\\":
+            out.append(char)
+            escaped = True
+            continue
+        if char == '"':
+            if _is_string_end(text, index):
+                out.append(char)
+                in_string = False
+            else:
+                out.append('\\"')
+            continue
+        out.append(controls.get(char, char))
+    return "".join(out)
+
+
+def _loads_json(raw):
+    """Parse the model's JSON object, repairing unescaped inner quotes."""
+    start, end = raw.find("{"), raw.rfind("}")
+    if start < 0 or end <= start:
+        raise RuntimeError("no JSON object in model output")
+    body = raw[start:end + 1]
+    try:
+        return json.loads(body)
+    except json.JSONDecodeError:
+        repaired = _repair_json_quotes(body)
+        if repaired == body:
+            raise
+        return json.loads(repaired)
 
 
 def strip_po_box(fields):

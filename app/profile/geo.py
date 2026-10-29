@@ -303,23 +303,94 @@ _INDIA_HINTS = (
     "nagpur", "surat", "vadodara", "ludhiana", "amritsar", "dehradun",
     "shimla", "srinagar", "bhubaneswar", "raipur", "panaji",
     "thiruvananthapuram", "kolhapur", "manipur", "meghalaya",
+    "tripura", "agartala", "thane", "navi mumbai", "palghar",
+    "nallasopara", "bilaspur", "gurgaon",
 )
 
 
 _COUNTRY_CODES = {
-    "united arab emirates": "ae", "dubai": "ae", "abu dhabi": "ae", "uae": "ae",
-    "kuwait": "kw", "oman": "om", "sultanate of oman": "om",
-    "qatar": "qa", "saudi arabia": "sa", "saudi": "sa", "riyadh": "sa",
-    "jeddah": "sa", "bahrain": "bh",
-    "egypt": "eg", "giza": "eg", "cairo": "eg",
-    "united states": "us", "usa": "us", "colorado": "us", "idaho": "us",
+    # South Asia / Middle East
+    "united arab emirates": "ae", "dubai": "ae", "abu dhabi": "ae",
+    "uae": "ae", "kuwait": "kw", "oman": "om", "sultanate of oman": "om",
+    "qatar": "qa", "doha": "qa", "saudi arabia": "sa", "saudi": "sa",
+    "riyadh": "sa", "jeddah": "sa", "bahrain": "bh", "manama": "bh",
+    "egypt": "eg", "giza": "eg", "cairo": "eg", "alexandria": "eg",
+    "iran": "ir", "tehran": "ir", "isfahan": "ir", "iraq": "iq",
+    "baghdad": "iq", "jordan": "jo", "amman": "jo", "lebanon": "lb",
+    "beirut": "lb", "israel": "il", "tel aviv": "il", "jerusalem": "il",
+    "turkey": "tr", "türkiye": "tr", "turkiye": "tr", "istanbul": "tr",
+    "ankara": "tr", "afghanistan": "af", "kabul": "af",
+    "bangladesh": "bd", "dhaka": "bd", "chittagong": "bd",
+    "sri lanka": "lk", "colombo": "lk", "nepal": "np", "kathmandu": "np",
+    "bhutan": "bt", "thimphu": "bt", "maldives": "mv",
+    "pakistan": "pk", "karachi": "pk", "lahore": "pk",
+    "islamabad": "pk",
+    # Africa
+    "uganda": "ug", "kampala": "ug", "kenya": "ke", "nairobi": "ke",
+    "mombasa": "ke", "eldoret": "ke", "tanzania": "tz",
+    "dar es salaam": "tz", "dodoma": "tz", "zanzibar": "tz",
+    "rwanda": "rw", "kigali": "rw", "mozambique": "mz", "maputo": "mz",
+    "ghana": "gh", "accra": "gh", "nigeria": "ng", "lagos": "ng",
+    "abuja": "ng", "ethiopia": "et", "addis ababa": "et",
+    "zambia": "zm", "lusaka": "zm", "malawi": "mw", "lilongwe": "mw",
+    "south sudan": "ss", "juba": "ss", "zimbabwe": "zw", "harare": "zw",
+    "botswana": "bw", "gaborone": "bw", "namibia": "na", "windhoek": "na",
+    "mauritius": "mu", "port louis": "mu", "seychelles": "sc",
+    "south africa": "za", "johannesburg": "za", "cape town": "za",
+    "durban": "za", "pretoria": "za", "morocco": "ma",
+    "casablanca": "ma", "algeria": "dz", "algiers": "dz",
+    "tunisia": "tn", "tunis": "tn", "libya": "ly", "tripoli": "ly",
+    "senegal": "sn", "dakar": "sn", "ivory coast": "ci",
+    "cote d'ivoire": "ci", "abidjan": "ci", "cameroon": "cm",
+    "douala": "cm",
+    # Americas
+    "united states": "us", "united states of america": "us", "usa": "us",
+    "u.s.a.": "us", "u.s.": "us", "colorado": "us", "idaho": "us",
     "california": "us", "texas": "us", "new york": "us",
-    "canada": "ca", "united kingdom": "gb", "uk": "gb", "london": "gb",
-    "singapore": "sg", "malaysia": "my", "australia": "au",
-    "germany": "de", "france": "fr", "italy": "it", "spain": "es",
-    "netherlands": "nl", "china": "cn", "japan": "jp", "hong kong": "hk",
-    "south africa": "za", "kenya": "ke", "nigeria": "ng",
-    "bangladesh": "bd", "sri lanka": "lk", "nepal": "np", "pakistan": "pk",
+    "new jersey": "us", "illinois": "us", "florida": "us",
+    "ohio": "us", "michigan": "us", "pennsylvania": "us",
+    "canada": "ca", "toronto": "ca", "ontario": "ca", "quebec": "ca",
+    "vancouver": "ca", "calgary": "ca", "montreal": "ca",
+    "etobicoke": "ca", "brazil": "br", "sao paulo": "br",
+    "rio de janeiro": "br", "mexico": "mx", "mexico city": "mx",
+    "argentina": "ar", "buenos aires": "ar", "chile": "cl",
+    "santiago": "cl", "colombia": "co", "bogota": "co", "peru": "pe",
+    "lima": "pe",
+    # Europe
+    "united kingdom": "gb", "uk": "gb", "london": "gb",
+    "england": "gb", "scotland": "gb", "wales": "gb",
+    "milton keynes": "gb", "buckinghamshire": "gb", "manchester": "gb",
+    "birmingham": "gb", "leeds": "gb", "glasgow": "gb",
+    "edinburgh": "gb", "ireland": "ie", "dublin": "ie",
+    "switzerland": "ch", "geneva": "ch", "zurich": "ch",
+    "germany": "de", "berlin": "de", "munich": "de",
+    "frankfurt": "de", "france": "fr", "paris": "fr", "lyon": "fr",
+    "italy": "it", "milan": "it", "rome": "it", "spain": "es",
+    "madrid": "es", "barcelona": "es", "portugal": "pt",
+    "lisbon": "pt", "netherlands": "nl", "amsterdam": "nl",
+    "rotterdam": "nl", "belgium": "be", "brussels": "be",
+    "austria": "at", "vienna": "at", "czech": "cz", "prague": "cz",
+    "poland": "pl", "warsaw": "pl", "romania": "ro",
+    "bucharest": "ro", "greece": "gr", "athens": "gr",
+    "sweden": "se", "stockholm": "se", "norway": "no", "oslo": "no",
+    "denmark": "dk", "copenhagen": "dk", "finland": "fi",
+    "helsinki": "fi", "hungary": "hu", "budapest": "hu",
+    "russia": "ru", "moscow": "ru", "ukraine": "ua", "kyiv": "ua",
+    # Asia-Pacific
+    "singapore": "sg", "malaysia": "my", "kuala lumpur": "my",
+    "australia": "au", "sydney": "au", "melbourne": "au",
+    "brisbane": "au", "perth": "au", "new zealand": "nz",
+    "auckland": "nz", "fiji": "fj", "china": "cn", "beijing": "cn",
+    "shanghai": "cn", "shenzhen": "cn", "xiamen": "cn", "厦门": "cn",
+    "hong kong": "hk", "taiwan": "tw", "taipei": "tw", "japan": "jp",
+    "tokyo": "jp", "osaka": "jp", "korea": "kr", "south korea": "kr",
+    "seoul": "kr", "indonesia": "id", "jakarta": "id",
+    "philippines": "ph", "manila": "ph", "thailand": "th",
+    "bangkok": "th", "vietnam": "vn", "viet nam": "vn", "hanoi": "vn",
+    "ho chi minh": "vn", "myanmar": "mm", "yangon": "mm",
+    "cambodia": "kh", "phnom penh": "kh", "laos": "la",
+    "vientiane": "la", "mongolia": "mn", "kazakhstan": "kz",
+    "almaty": "kz", "uzbekistan": "uz", "tashkent": "uz",
 }
 
 _COUNTRY_NAMES = {
@@ -331,12 +402,35 @@ _COUNTRY_NAMES = {
     "es": "Spain", "nl": "Netherlands", "cn": "China", "jp": "Japan",
     "hk": "Hong Kong", "za": "South Africa", "ke": "Kenya",
     "ng": "Nigeria", "bd": "Bangladesh", "lk": "Sri Lanka", "np": "Nepal",
-    "pk": "Pakistan",
+    "pk": "Pakistan", "ir": "Iran", "iq": "Iraq", "jo": "Jordan",
+    "lb": "Lebanon", "il": "Israel", "tr": "Turkey", "af": "Afghanistan",
+    "bt": "Bhutan", "mv": "Maldives", "ug": "Uganda", "tz": "Tanzania",
+    "rw": "Rwanda", "mz": "Mozambique", "gh": "Ghana", "et": "Ethiopia",
+    "zm": "Zambia", "mw": "Malawi", "ss": "South Sudan", "zw": "Zimbabwe",
+    "bw": "Botswana", "na": "Namibia", "mu": "Mauritius",
+    "sc": "Seychelles", "ma": "Morocco", "dz": "Algeria",
+    "tn": "Tunisia", "ly": "Libya", "sn": "Senegal",
+    "ci": "Ivory Coast", "cm": "Cameroon", "br": "Brazil",
+    "mx": "Mexico", "ar": "Argentina", "cl": "Chile", "co": "Colombia",
+    "pe": "Peru", "ch": "Switzerland", "ie": "Ireland",
+    "pt": "Portugal", "be": "Belgium", "at": "Austria", "cz": "Czechia",
+    "pl": "Poland", "ro": "Romania", "gr": "Greece", "se": "Sweden",
+    "no": "Norway", "dk": "Denmark", "fi": "Finland", "hu": "Hungary",
+    "ru": "Russia", "ua": "Ukraine", "nz": "New Zealand", "fj": "Fiji",
+    "tw": "Taiwan", "kr": "South Korea", "id": "Indonesia",
+    "ph": "Philippines", "th": "Thailand", "vn": "Vietnam",
+    "mm": "Myanmar", "kh": "Cambodia", "la": "Laos", "mn": "Mongolia",
+    "kz": "Kazakhstan", "uz": "Uzbekistan",
 }
 
 
 def country_filter_for(company_location, company=""):
-    """Return the expected ISO country code; default India."""
+    """Return the expected ISO country code.
+
+    An empty location keeps the workbook default (India). A non-empty location
+    the table cannot recognise returns "" (unknown), so callers neither reject
+    nor label a valid foreign address as Indian.
+    """
     text = _normalize(company_location)
     name = _normalize(company)
     if not text:
@@ -346,7 +440,7 @@ def country_filter_for(company_location, company=""):
     for hint, code in _COUNTRY_CODES.items():
         if hint in text:
             return code
-    return "in"
+    return ""
 
 
 def country_name_for(code):

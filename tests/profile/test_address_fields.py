@@ -70,3 +70,21 @@ def test_international_postal_code_is_preserved():
     assert result["fields"]["postal_code"] == "00000"
     assert result["fields"]["country"] == "United Arab Emirates"
     assert address_fields.deliverable(result["fields"], india=False) is True
+
+
+def test_unknown_location_does_not_stamp_india():
+    result = address_fields.fill(
+        {"address_line1": "Plot 2D/E Nakasero Hill Road", "city": "Kampala",
+         "postal_code": "", "country": ""},
+        company_location="Somewhere Unmapped", india=False)
+    assert result["fields"]["country"] == ""
+    assert not any(item.startswith("country=India")
+                   for item in result["derived"])
+
+
+def test_known_foreign_location_fills_country():
+    result = address_fields.fill(
+        {"address_line1": "Plot 2D/E Nakasero Hill Road", "country": ""},
+        company_location="Kampala, Uganda", india=False)
+    assert result["fields"]["country"] == "Uganda"
+

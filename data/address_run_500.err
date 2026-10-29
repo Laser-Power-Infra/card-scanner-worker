@@ -1,0 +1,751 @@
+2026-10-27 18:25:56,765 card-desk.handlers INFO >>> worker called: workers.address (contact cmvqnjx0i000y08kzmz9mpdyz, K Sreenivasa Rao)
+2026-10-27 18:25:58,417 subsidiary.search WARNING Search key SEARCH_TAVILY_API_KEY unavailable; cooldown=21600s
+2026-10-27 18:26:01,318 card-desk.address-ai WARNING model rejected temperature; extraction is no longer deterministic across runs
+2026-10-27 18:26:22,499 card-desk.worker.address INFO address: approximate for Vishwa Samudra Engineering Pvt. Ltd. (2 location(s))
+2026-10-27 18:26:22,502 card-desk.address-attempt INFO ADDRESS_ATTEMPT d52215983f0c (contact cmvqnjx0i000y08kzmz9mpdyz, Vishwa Samudra Engineering Pvt. Ltd.)
+  time      : 2026-10-27T12:55:56Z | 25.7s
+  outcome   : PASS
+  reason    : approximate
+  pages     : 5
+    - https://vishwasamudra.in/contact-us/ | Contact us – Vishwa Samudra ## Enter the below details VSE is part of the Vishwa Samudra Group A multilateral business conglomerate headquartered in Hyderabad, India, with over 25 companies. ## Corpor
+    - https://vishwasamudra.in/research/ | Research – Vishwa Samudra ## VISHWA SAMUDRA ENGINEERING (VSE) We have a strong team of Research and development experts who are constantly working on futuristic, problem-solving technological methods
+    - https://exa.ai/library/place/kvsj8t057ck | # Vishwa Samudra Engineering Vishwa Samudra Engineering is a business service in Hyderabad, State of Telangāna, India. ## Location - **Address:** 8th & 9th Floor, Vamsiram Jyothi Velencia, Road No. 2,
+    - https://tracxn.com/d/legal-entities/india/vishwa-samudra-engineering-private-limited/__sUpZ0NManEvAxICiHXRetkjfJ-Krgixt9V4AOOU24fg | Vishwa Samudra Engineering Private Limited - 2026 Company Profile & Financials - Tracxn # Vishwa Samudra Engineering Private Limited - Company Profile Associated Brands: Vishwa Samudra Engineering Las
+    - https://www.leikart.com/leicert/335800PK1GKTJ1J78137/ | VISHWA SAMUDRA ENGINEERING PRIVATE LIMITED - LEI: 335800PK1GKTJ1J78137 | LEIKart Toll free: 1800-121-0756 (18001210756) For bankers: 91 806-520-5313 (918065205313) # VISHWA SAMUDRA ENGINEERING PRIVATE
+  extracted : line1=Raheja Chambers, Main Avenue Crossing | line2=3rd Floor, Above Benetton Showroom, Linking Road, Santa Cruz West | city=Mumbai | state=Maharashtra | pin=400054 | country=India | evidence=https://vishwasamudra.in/contact-us/
+  map       : Linking Road, Santacruz West, Mumbai - 400054, MH, India | lat=19.0844724 lon=72.8346157 | type=street | match=match_by_street conf=0.5 | precision=STREET | place=519a0ef8576a35524059256ab3fb9f153340f00102f901fe07a44a00000000c0020492030c4c696e
+  checks    : 0 failed of 11
+    [PASS] country: expected=in | result=in
+    [PASS] street_level: result_type=street
+    [PASS] match_type: match_type=match_by_street
+    [PASS] confidence: confidence=0.5
+    [PASS] street_present: street=Linking Road | postcode=400054
+    [PASS] postcode: expected=400054 | result=400054
+    [PASS] postcode_valid: result=400054
+    [PASS] city: expected=mumbai | result=mumbai
+    [PASS] expected_state: expected=maharashtra | result=maharashtra,mh
+    [PASS] street: expected=raheja chambers main avenue crossing 3rd floor above benetton showroom linking road santa cruz west | result=linking road | house=-
+    [PASS] area_distance: 0.3 km from pin area (verified <= 3.0 km, limit <= 10 km)
+  notes     : no site page with a street address; unscoped search ; search returned 5 results (scoped=False) ; company_match: high=5 medium=0 low=0 none=0 ; pages fetched=5 selected=5 dropped=0 ; address candidates: valid=2 rejected=1 ; rejected address (country_mismatch): other Lot 99, Hadfield Street ; other address: branch Raheja Chambers, Main Avenue Crossing ; area from pin 500034 (Hyderabad, geoapify) ; saved approximate/STREET at Hyderabad ; area from pin 400054 (Mumbai, geoapify) ; saved approximate/STREET at Mumbai ; primary location: 3714a6cb-d0ae-4bf7-8bbf-0fb4d3a1a639 ; saved locations: 2 of 2 candidates
+  lookups   : full:3/approximate/STREET@0.5km | full:3/approximate/STREET@0.3km
+              worked: full
+  candidates: 2 (saved=2, primary=2)
+  candidate 1/2:
+    type      : registered
+    extracted : line1=Vamsiram Jyothi Valencia, Road No. 2 | line2=8TH & 9TH FLOOR, BANJARA HILLS | city=Hyderabad | state=Telangana | pin=500034 | country=India | evidence=https://tracxn.com/d/legal-entities/india/vishwa-samudra-engineering-private-limited/__sUpZ0NManEvAxICiHXRetkjfJ-Krgixt9V4AOOU24fg
+    map       : Banjara Hills Road Number 5, Banjara Hills, Hyderabad - 500034, TG, India | lat=17.4220012 lon=78.4465294 | type=street | precision=STREET
+    checks    : 1 failed of 11
+      [PASS] country: expected=in | result=in
+      [PASS] street_level: result_type=street
+      [PASS] match_type: match_type=match_by_street
+      [FAIL] confidence: confidence=0.405
+      [PASS] street_present: street=Banjara Hills Road Number 5 | postcode=500034
+      [PASS] postcode: expected=500034 | result=500034
+      [PASS] postcode_valid: result=500034
+      [PASS] city: expected=hyderabad | result=hyderabad
+      [PASS] expected_state: expected=telangana | result=telangana,tg
+      [PASS] street: expected=vamsiram jyothi valencia road no 2 8th 9th floor banjara hills | result=banjara hills road number 5 | house=-
+      [PASS] area_distance: 0.5 km from pin area (verified <= 3.0 km, limit <= 10 km)
+    lookups   : full:3/approximate/STREET@0.5km
+      full    : 79/approximate/STREET@0.5km Banjara Hills Road Number 5, Banjara Hills, Hyderabad - 500034, TG, In | 79/approximate/STREET@0.6km Banjara Hills Road Number 11, Banjara Hills, Hyderabad - 500034, TG, I | 78/approximate/STREET@1.3km Banjara Hills Road Number 10, Banjara Hills, Hyderabad - 500034, TG, I
+    verdict   : approximate/STREET | distance=0.5km | reason=low_confidence | pin_source=map | saved=3714a6cb-d0ae-4bf7-8bbf-0fb4d3a1a639
+  candidate 2/2:
+    type      : branch
+    extracted : line1=Raheja Chambers, Main Avenue Crossing | line2=3rd Floor, Above Benetton Showroom, Linking Road, Santa Cruz West | city=Mumbai | state=Maharashtra | pin=400054 | country=India | evidence=https://vishwasamudra.in/contact-us/
+    map       : Linking Road, Santacruz West, Mumbai - 400054, MH, India | lat=19.0844724 lon=72.8346157 | type=street | precision=STREET
+    checks    : 0 failed of 11
+      [PASS] country: expected=in | result=in
+      [PASS] street_level: result_type=street
+      [PASS] match_type: match_type=match_by_street
+      [PASS] confidence: confidence=0.5
+      [PASS] street_present: street=Linking Road | postcode=400054
+      [PASS] postcode: expected=400054 | result=400054
+      [PASS] postcode_valid: result=400054
+      [PASS] city: expected=mumbai | result=mumbai
+      [PASS] expected_state: expected=maharashtra | result=maharashtra,mh
+      [PASS] street: expected=raheja chambers main avenue crossing 3rd floor above benetton showroom linking road santa cruz west | result=linking road | house=-
+      [PASS] area_distance: 0.3 km from pin area (verified <= 3.0 km, limit <= 10 km)
+    lookups   : full:3/approximate/STREET@0.3km
+      full    : 79/approximate/STREET@0.3km Linking Road, Santacruz West, Mumbai - 400054, MH, India | 79/approximate/STREET@0.7km Linking Road, Vile Parle West, Mumbai - 400054, MH, India | 63/rejected/STREET@2.4km Linking Road, Khar, Mumbai - 400050, MH, India
+    verdict   : approximate/STREET | distance=0.3km | reason=ok | pin_source=map | saved=5660f1cb-4435-474f-a4bf-384e11ebeb98
+2026-10-27 18:26:22,502 card-desk.handlers INFO >>> worker called: workers.address (contact cmvqni44e000x08kzzuwbct52, D. Venu Babu)
+2026-10-27 18:26:22,817 card-desk.address-cache INFO address cache hit for Vishwa Samudra Engineering Pvt. Ltd. (2026-10-27T12:56:00)
+2026-10-27 18:26:23,674 card-desk.address-ai WARNING model rejected temperature; extraction is no longer deterministic across runs
+2026-10-27 18:26:35,563 card-desk.worker.address INFO address: approximate for Vishwa Samudra Engineering Pvt. Ltd. (2 location(s))
+2026-10-27 18:26:35,563 card-desk.address-attempt INFO ADDRESS_ATTEMPT 8a7000304167 (contact cmvqni44e000x08kzzuwbct52, Vishwa Samudra Engineering Pvt. Ltd.)
+  time      : 2026-10-27T12:56:22Z | 13.1s
+  outcome   : PASS
+  reason    : approximate
+  pages     : 5
+    - https://vishwasamudra.in/contact-us/ | Contact us – Vishwa Samudra ## Enter the below details VSE is part of the Vishwa Samudra Group A multilateral business conglomerate headquartered in Hyderabad, India, with over 25 companies. ## Corpor
+    - https://vishwasamudra.in/research/ | Research – Vishwa Samudra ## VISHWA SAMUDRA ENGINEERING (VSE) We have a strong team of Research and development experts who are constantly working on futuristic, problem-solving technological methods
+    - https://exa.ai/library/place/kvsj8t057ck | # Vishwa Samudra Engineering Vishwa Samudra Engineering is a business service in Hyderabad, State of Telangāna, India. ## Location - **Address:** 8th & 9th Floor, Vamsiram Jyothi Velencia, Road No. 2,
+    - https://tracxn.com/d/legal-entities/india/vishwa-samudra-engineering-private-limited/__sUpZ0NManEvAxICiHXRetkjfJ-Krgixt9V4AOOU24fg | Vishwa Samudra Engineering Private Limited - 2026 Company Profile & Financials - Tracxn # Vishwa Samudra Engineering Private Limited - Company Profile Associated Brands: Vishwa Samudra Engineering Las
+    - https://www.leikart.com/leicert/335800PK1GKTJ1J78137/ | VISHWA SAMUDRA ENGINEERING PRIVATE LIMITED - LEI: 335800PK1GKTJ1J78137 | LEIKart Toll free: 1800-121-0756 (18001210756) For bankers: 91 806-520-5313 (918065205313) # VISHWA SAMUDRA ENGINEERING PRIVATE
+  extracted : line1=Raheja Chambers, Main Avenue Crossing | line2=3rd Floor, Above Benetton Showroom, Linking Road, Santa Cruz West | city=Mumbai | state=Maharashtra | pin=400054 | country=India | evidence=https://vishwasamudra.in/contact-us/
+  map       : Linking Road, Santacruz West, Mumbai - 400054, MH, India | lat=19.0844724 lon=72.8346157 | type=street | match=match_by_street conf=0.5 | precision=STREET | place=519a0ef8576a35524059256ab3fb9f153340f00102f901fe07a44a00000000c0020492030c4c696e
+  checks    : 0 failed of 11
+    [PASS] country: expected=in | result=in
+    [PASS] street_level: result_type=street
+    [PASS] match_type: match_type=match_by_street
+    [PASS] confidence: confidence=0.5
+    [PASS] street_present: street=Linking Road | postcode=400054
+    [PASS] postcode: expected=400054 | result=400054
+    [PASS] postcode_valid: result=400054
+    [PASS] city: expected=mumbai | result=mumbai
+    [PASS] expected_state: expected=maharashtra | result=maharashtra,mh
+    [PASS] street: expected=raheja chambers main avenue crossing 3rd floor above benetton showroom linking road santa cruz west | result=linking road | house=-
+    [PASS] area_distance: 0.3 km from pin area (verified <= 3.0 km, limit <= 10 km)
+  notes     : cache hit: pages=5 fetched=2026-10-27T12:56:00 ; address candidates: valid=2 rejected=1 ; rejected address (country_mismatch): other Lot 99, Hadfield Street ; other address: branch Raheja Chambers, Main Avenue Crossing ; area from pin 500034 (Hyderabad, geoapify) ; saved approximate/STREET at Hyderabad ; area from pin 400054 (Mumbai, geoapify) ; geocode cache hit: approximate/STREET ; saved approximate/STREET at Mumbai ; primary location: 8df1bf7b-ad6c-42c1-96ea-5e17811cc5a3 ; saved locations: 2 of 2 candidates
+  lookups   : full:3/approximate/STREET@0.5km | cache:1/approximate/STREET@0.3km
+              worked: full
+  candidates: 2 (saved=2, primary=2)
+  candidate 1/2:
+    type      : registered
+    extracted : line1=Vamsiram Jyothi Valencia, Road No. 2 | line2=8th & 9th Floors, Banjara Hills | city=Hyderabad | state=Telangana | pin=500034 | country=India | evidence=https://vishwasamudra.in/contact-us/
+    map       : Banjara Hills Road Number 5, Banjara Hills, Hyderabad - 500034, TG, India | lat=17.4220012 lon=78.4465294 | type=street | precision=STREET
+    checks    : 1 failed of 11
+      [PASS] country: expected=in | result=in
+      [PASS] street_level: result_type=street
+      [PASS] match_type: match_type=match_by_street
+      [FAIL] confidence: confidence=0.405
+      [PASS] street_present: street=Banjara Hills Road Number 5 | postcode=500034
+      [PASS] postcode: expected=500034 | result=500034
+      [PASS] postcode_valid: result=500034
+      [PASS] city: expected=hyderabad | result=hyderabad
+      [PASS] expected_state: expected=telangana | result=telangana,tg
+      [PASS] street: expected=vamsiram jyothi valencia road no 2 8th 9th floors banjara hills | result=banjara hills road number 5 | house=-
+      [PASS] area_distance: 0.5 km from pin area (verified <= 3.0 km, limit <= 10 km)
+    lookups   : full:3/approximate/STREET@0.5km
+      full    : 79/approximate/STREET@0.5km Banjara Hills Road Number 5, Banjara Hills, Hyderabad - 500034, TG, In | 79/approximate/STREET@0.6km Banjara Hills Road Number 11, Banjara Hills, Hyderabad - 500034, TG, I | 78/approximate/STREET@1.3km Banjara Hills Road Number 10, Banjara Hills, Hyderabad - 500034, TG, I
+    verdict   : approximate/STREET | distance=0.5km | reason=low_confidence | pin_source=map | saved=8df1bf7b-ad6c-42c1-96ea-5e17811cc5a3
+  candidate 2/2:
+    type      : branch
+    extracted : line1=Raheja Chambers, Main Avenue Crossing | line2=3rd Floor, Above Benetton Showroom, Linking Road, Santa Cruz West | city=Mumbai | state=Maharashtra | pin=400054 | country=India | evidence=https://vishwasamudra.in/contact-us/
+    map       : Linking Road, Santacruz West, Mumbai - 400054, MH, India | lat=19.0844724 lon=72.8346157 | type=street | precision=STREET
+    checks    : 0 failed of 11
+      [PASS] country: expected=in | result=in
+      [PASS] street_level: result_type=street
+      [PASS] match_type: match_type=match_by_street
+      [PASS] confidence: confidence=0.5
+      [PASS] street_present: street=Linking Road | postcode=400054
+      [PASS] postcode: expected=400054 | result=400054
+      [PASS] postcode_valid: result=400054
+      [PASS] city: expected=mumbai | result=mumbai
+      [PASS] expected_state: expected=maharashtra | result=maharashtra,mh
+      [PASS] street: expected=raheja chambers main avenue crossing 3rd floor above benetton showroom linking road santa cruz west | result=linking road | house=-
+      [PASS] area_distance: 0.3 km from pin area (verified <= 3.0 km, limit <= 10 km)
+    lookups   : cache:1/approximate/STREET@0.3km
+    verdict   : approximate/STREET | distance=0.3km | reason=ok | pin_source=map | saved=5b5b5f66-5e49-4953-9c98-f6572702a24f
+2026-10-27 18:26:35,563 card-desk.handlers INFO >>> worker called: workers.address (contact cmvqnh2yj000w08kzdr1uite7, Dilip Bhattacharya)
+2026-10-27 18:26:38,414 card-desk.address-ai WARNING model rejected temperature; extraction is no longer deterministic across runs
+2026-10-27 18:27:11,400 card-desk.worker.address INFO address: verified for NewTech Enterprises (2 location(s))
+2026-10-27 18:27:11,400 card-desk.address-attempt INFO ADDRESS_ATTEMPT 297167a99c77 (contact cmvqnh2yj000w08kzdr1uite7, NewTech Enterprises)
+  time      : 2026-10-27T12:56:35Z | 35.8s
+  outcome   : PASS
+  reason    : verified
+  pages     : 4
+    - https://gst.iadv.io/NEWTECH-ENTERPRISES-27AIAPS4669P1ZE/ | NEWTECH ENTERPRISES | GST: 27AIAPS4669P1ZE | | GST Details for NEWTECH ENTERPRISES🖯™ | | | --- | --- | --- | | GST Number | 27AIAPS4669P1ZE ℹ︎ | | | Business Name | NEWTECH ENTERPRISES ℹ︎ | | | PAN Nu
+    - https://www.sulekha.com/new-tech-enterprise-park-street-kolkata-contact-address | NEW TECH ENTERPRISE in Park Street, Kolkata | Sulekha # NEW TECH ENTERPRISE Park Street Kolkata Park Street, Kolkata 5.0/5 Based on 2 Reviews Hours: - Sunday : 24 Hrs - Monday - Friday : 10:00 AM - 7:
+    - https://exa.ai/library/place/l0tl76y3436 | # Newtech Enterprises, Honeywell, Pelco, Axis cctv camera dealers and distributors in India Newtech Enterprises, Honeywell, Pelco, Axis cctv camera dealers and distributors in India is a telecommunica
+    - https://www.indiamart.com/newtechenterprises-delhi/profile.html | Newtech Enterprises - Manufacturer from Mundka, New Delhi, India | About Us X # Newtech Enterprises Mundka, New Delhi, Delhi GST TrustSEALVerified 3 yrs ★★★★★★★★★★ 85% Response rate View Mobile Number
+  extracted : line1=113 park street | line2=poddar point, north block, 5th floor | city=Kolkata | state=West Bengal | pin=700016 | country=India | evidence=https://www.sulekha.com/new-tech-enterprise-park-street-kolkata-contact-address
+  map       : 113, Park Street, Ripon Street, Kolkata - 700016, WB, India | lat=22.5487309 lon=88.3595689 | type=building | match=full_match conf=1 | precision=BUILDING | place=51288a462d0317564059fdcdd5a0798c3640f00102f901e0a3661500000000c00203
+  checks    : 0 failed of 11
+    [PASS] country: expected=in | result=in
+    [PASS] street_level: result_type=building
+    [PASS] match_type: match_type=full_match
+    [PASS] confidence: confidence=1.0
+    [PASS] street_present: street=Park Street | postcode=700016
+    [PASS] postcode: expected=700016 | result=700016
+    [PASS] postcode_valid: result=700016
+    [PASS] city: expected=kolkata | result=kolkata
+    [PASS] expected_state: expected=west bengal | result=wb,west bengal
+    [PASS] street: expected=113 park street poddar point north block 5th floor | result=park street | house=113
+    [PASS] area_distance: 0.6 km from pin area (verified <= 3.0 km, limit <= 10 km)
+  review    : not_street_level ; pin_fallback
+  notes     : no site page with a street address; unscoped search ; search returned 5 results (scoped=False) ; company_match: high=4 medium=0 low=1 none=0 ; pages fetched=5 selected=4 dropped=1 ; address candidates: valid=2 rejected=0 ; other address: other 113 park street ; area from pin 411002 (Pune, geoapify) ; full: no result above score 50 ; street_postcode: no result above score 50 ; landmark results filtered: 2 outside name overlap or 2 km ; area_city: no result above score 30 ; saved approximate/AREA from pin_centre (map: not_street_level) ; area from pin 700016 (Kolkata, geoapify) ; saved verified/BUILDING at Kolkata ; primary location: 80a103fb-be55-4ecc-b0ae-3944a403420c ; saved locations: 2 of 2 candidates
+  lookups   : full:2/below_threshold | street_postcode:3/below_threshold | landmark_city:0/no_results | area_city:2/below_threshold | full:1/verified/BUILDING@0.6km
+              worked: full
+  candidates: 2 (saved=2, primary=2)
+  candidate 1/2:
+    type      : registered
+    extracted : line1=661/662, SHIWAJI ROAD | line2=NEAR NEW CADIKHANA HOSPIT, ANKOOR CORNER, SHUKRAWAR PETH | city=Pune | state=Maharashtra | pin=411002 | country=India | evidence=https://gst.iadv.io/NEWTECH-ENTERPRISES-27AIAPS4669P1ZE/
+    map       : Pune - 411002, MH, India | lat=18.482571 lon=73.857768 | type=city | precision=CITY
+    checks    : 4 failed of 11
+      [PASS] country: expected=in | result=in
+      [FAIL] street_level: result_type=city
+      [PASS] match_type: match_type=match_by_city_or_disrict
+      [FAIL] confidence: confidence=0.25
+      [FAIL] street_present: street=- | postcode=411002
+      [PASS] postcode: expected=411002 | result=411002
+      [PASS] postcode_valid: result=411002
+      [PASS] city: expected=pune | result=pune
+      [PASS] expected_state: expected=maharashtra | result=maharashtra,mh
+      [FAIL] street: expected=661 662 shiwaji road near new cadikhana hospit ankoor corner shukrawar peth | result=- | house=-
+      [PASS] area_distance: 3.2 km from pin area (verified <= 3.0 km, limit <= 10 km)
+    lookups   : full:2/below_threshold | street_postcode:3/below_threshold | landmark_city:0/no_results | area_city:2/below_threshold
+      full    : 37/approximate/CITY@3.2km Pune - 411002, MH, India | 27/rejected/AREA@0.6km Shukrawar Peth, Pune - 411001, MH, India
+      street_postcode: 3/rejected/CITY@21.2km Peth, Pune, India | 3/rejected/CITY@65.1km Peth, Raigarh, India | 3/rejected/CITY@166.9km Peth, Sangli, India
+      area_city: 36/rejected/AREA@0.0km 411002, MH, India | 26/rejected/CITY@1.2km Pune - 411001, MH, India
+    verdict   : approximate/AREA | distance=3.2km | reason=pin_fallback | pin_source=pin_centre | saved=52a1432c-bc02-47e0-82d3-57c31eb20a72
+    rejected  : Pune - 411002, MH, India | 18.482571,73.857768 | type=city | precision=CITY
+  candidate 2/2:
+    type      : other
+    extracted : line1=113 park street | line2=poddar point, north block, 5th floor | city=Kolkata | state=West Bengal | pin=700016 | country=India | evidence=https://www.sulekha.com/new-tech-enterprise-park-street-kolkata-contact-address
+    map       : 113, Park Street, Ripon Street, Kolkata - 700016, WB, India | lat=22.5487309 lon=88.3595689 | type=building | precision=BUILDING
+    checks    : 0 failed of 11
+      [PASS] country: expected=in | result=in
+      [PASS] street_level: result_type=building
+      [PASS] match_type: match_type=full_match
+      [PASS] confidence: confidence=1.0
+      [PASS] street_present: street=Park Street | postcode=700016
+      [PASS] postcode: expected=700016 | result=700016
+      [PASS] postcode_valid: result=700016
+      [PASS] city: expected=kolkata | result=kolkata
+      [PASS] expected_state: expected=west bengal | result=wb,west bengal
+      [PASS] street: expected=113 park street poddar point north block 5th floor | result=park street | house=113
+      [PASS] area_distance: 0.6 km from pin area (verified <= 3.0 km, limit <= 10 km)
+    lookups   : full:1/verified/BUILDING@0.6km
+      full    : 110/verified/BUILDING@0.6km 113, Park Street, Ripon Street, Kolkata - 700016, WB, India
+    verdict   : verified/BUILDING | distance=0.6km | reason=ok | pin_source=map | saved=80a103fb-be55-4ecc-b0ae-3944a403420c
+2026-10-27 18:27:11,400 card-desk.handlers INFO >>> worker called: workers.address (contact cmvqnexjk000u08kzyu8lot45, Umang Agarwal)
+2026-10-27 18:27:15,442 card-desk.address-ai WARNING model rejected temperature; extraction is no longer deterministic across runs
+2026-10-27 18:27:58,335 card-desk.worker.address INFO address: approximate for Ladhuram & Sons (2 location(s))
+2026-10-27 18:27:58,335 card-desk.address-attempt INFO ADDRESS_ATTEMPT 255951eee39a (contact cmvqnexjk000u08kzyu8lot45, Ladhuram & Sons)
+  time      : 2026-10-27T12:57:11Z | 46.9s
+  outcome   : PASS
+  reason    : approximate
+  pages     : 5
+    - https://tracxn.com/d/legal-entities/india/ladhuram-sons-electrical-private-limited/__xJjDxKK0HNN3W5SWTgPmbOqwbaeOU_Ls7xmhVOEtY-A | LADHURAM & SONS ELECTRICAL PRIVATE LIMITED - 2026 Company Profile & Financials - Tracxn # LADHURAM & SONS ELECTRICAL PRIVATE LIMITED - Company Profile Last updated: March 20, 2026 ## About LADHURAM &
+    - https://www.deldure.com/id/10100504/laduram-and-sons/jamshedpur | Deldure | Laduram & Sons | Jamshedpur # LADURAM & SONS Location View Phone Number Address: Marwari Para Road, Jugsalai, Jamshedpur - 831006 City: Jamshedpur Pincode: 831006 State: Jharkhand Country: I
+    - https://www.infyner.com/company/ladhuram-sons-electrical-private-limited/U31909JH2007PTC012747 | Ladhuram & Sons Electrical Private Limited - Directors, Financials, Charges & MCA Details | Infyner # Ladhuram & Sons Electrical Private Limited - Company overview Ladhuram & Sons Electrical Private L
+    - https://www.zaubacorp.com/LADHURAM-AND-SONS-ELECTRICAL-PRIVATE-LIMITED-U31909JH2007PTC012747 | LADHURAM & SONS ELECTRICAL PRIVATE LIMITED | ZaubaCorp # LADHURAM & SONS ELECTRICAL PRIVATE LIMITED ## Company Information LADHURAM & SONS ELECTRICAL PRIVATE LIMITED (CIN: U31909JH2007PTC012747) is a
+    - https://www.bharatibiz.com/en/ladhuram-sons-092346-86529 | Ladhuram & Sons | 092346 86529 | Jamshedpur # Ladhuram & Sons ## Business Contact ### Anil Manager Phone: 099789 15874 (919978915874) ## Contact Information Ladhuram & SonsR.A Tower, D Costa Road, Cho
+  extracted : line1=R A TOWER, D COSTA ROAD | line2=FLAT NO- 4B, 4C, 4TH FLOOR, JUGSALAI | city=JAMSHEDPUR | state=Jharkhand | pin=- | country=India | evidence=https://tracxn.com/d/legal-entities/india/ladhuram-sons-electrical-private-limited/__xJjDxKK0HNN3W5SWTgPmbOqwbaeOU_Ls7xmhVOEtY-A
+  map       : 4c, D Road, Barrackpore - 700119, WB, India | lat=22.760289 lon=88.375342 | type=building | match=full_match conf=0.33333333333333337 | precision=AREA | place=512db4739a05185640593082c64ca2c23640c00203e203266f70656e7374726565746d61703a7374
+  checks    : 6 failed of 12
+    [PASS] country: expected=in | result=in
+    [PASS] street_level: result_type=building
+    [PASS] match_type: match_type=full_match
+    [FAIL] confidence: confidence=0.33333333333333337
+    [PASS] street_present: street=D Road | postcode=700119
+    [PASS] postcode: expected=- | result=700119
+    [PASS] postcode_valid: result=700119
+    [FAIL] city: expected=jamshedpur | result=barrackpore
+    [FAIL] expected_state: expected=jharkhand | result=wb,west bengal
+    [FAIL] street: expected=r a tower d costa road flat no 4b 4c 4th floor jugsalai | result=d road | house=4c
+    [FAIL] state: hint=jamshedpur jharkhand india (Jharkhand) | result=wb,west bengal
+    [FAIL] area_distance: 222.8 km from city area (verified <= 3.0 km, limit <= 15 km)
+  review    : area_mismatch ; pin_fallback
+  notes     : no site page with a street address; unscoped search ; search returned 5 results (scoped=False) ; company_match: high=4 medium=1 low=0 none=0 ; pages fetched=5 selected=5 dropped=0 ; address candidates: valid=2 rejected=0 ; postal_code cleared: pin 831006 (East Singhbhum/East Singhbhum) does not match city JAMSHEDPUR ; postal_code cleared: pin 831006 (East Singhbhum/East Singhbhum) does not match city Jamshedpur ; other address: branch Marwari Para Road ; full: no result above score 50 ; street_postcode: no result above score 50 ; landmark results filtered: 3 outside name overlap or 2 km ; area_city: no result above score 30 ; saved approximate/CITY from city_centre (map: area_mismatch) ; full: no result above score 50 ; street_postcode: no result above score 50 ; landmark results filtered: 3 outside name overlap or 2 km ; area_city: no result above score 30 ; saved approximate/CITY from city_centre (map: area_mismatch) ; primary location: f5014654-14d5-4432-a788-ee152e3b3309 ; saved locations: 2 of 2 candidates
+  lookups   : full:3/below_threshold | street_postcode:3/below_threshold | landmark_city:0/no_results | area_city:1/below_threshold | full:3/below_threshold | street_postcode:3/below_threshold | landmark_city:0/no_results | area_city:1/below_threshold
+              worked: -
+  candidates: 2 (saved=2, primary=1)
+  candidate 1/2:
+    type      : registered
+    extracted : line1=R A TOWER, D COSTA ROAD | line2=FLAT NO- 4B, 4C, 4TH FLOOR, JUGSALAI | city=JAMSHEDPUR | state=Jharkhand | pin=- | country=India | evidence=https://tracxn.com/d/legal-entities/india/ladhuram-sons-electrical-private-limited/__xJjDxKK0HNN3W5SWTgPmbOqwbaeOU_Ls7xmhVOEtY-A
+    map       : 4c, D Road, Barrackpore - 700119, WB, India | lat=22.760289 lon=88.375342 | type=building | precision=AREA
+    checks    : 6 failed of 12
+      [PASS] country: expected=in | result=in
+      [PASS] street_level: result_type=building
+      [PASS] match_type: match_type=full_match
+      [FAIL] confidence: confidence=0.33333333333333337
+      [PASS] street_present: street=D Road | postcode=700119
+      [PASS] postcode: expected=- | result=700119
+      [PASS] postcode_valid: result=700119
+      [FAIL] city: expected=jamshedpur | result=barrackpore
+      [FAIL] expected_state: expected=jharkhand | result=wb,west bengal
+      [FAIL] street: expected=r a tower d costa road flat no 4b 4c 4th floor jugsalai | result=d road | house=4c
+      [FAIL] state: hint=jamshedpur jharkhand india (Jharkhand) | result=wb,west bengal
+      [FAIL] area_distance: 222.8 km from city area (verified <= 3.0 km, limit <= 15 km)
+    lookups   : full:3/below_threshold | street_postcode:3/below_threshold | landmark_city:0/no_results | area_city:1/below_threshold
+      full    : 23/approximate/CITY@0.0km Jamshedpur, JH, India | 12/rejected/CITY@508.1km Jamshedpur, UP, India | 2/rejected/CITY@1052.1km Jamshedapur, TG, India
+      street_postcode: 33/rejected/AREA@246.5km 4c, D Road, Dhenkanal -, OR, India | 33/rejected/AREA@222.8km 4c, D Road, Barrackpore - 700119, WB, India | 33/rejected/AREA@1454.2km 4c, D Road, Churchgate, Mumbai - 400021, MH, India
+      area_city: 27/approximate/CITY@0.0km Jamshedpur, JH, India
+    verdict   : approximate/CITY | distance=222.8km | reason=pin_fallback | pin_source=city_centre | saved=f5014654-14d5-4432-a788-ee152e3b3309
+    rejected  : 4c, D Road, Barrackpore - 700119, WB, India | 22.760289,88.375342 | type=building | precision=AREA
+  candidate 2/2:
+    type      : branch
+    extracted : line1=Marwari Para Road | line2=Jugsalai | city=Jamshedpur | state=Jharkhand | pin=- | country=India | evidence=https://www.deldure.com/id/10100504/laduram-and-sons/jamshedpur
+    map       : Marwari Dharamsala Road, - 848114, BR, India | lat=25.667471 lon=85.835286 | type=street | precision=AREA
+    checks    : 5 failed of 12
+      [PASS] country: expected=in | result=in
+      [PASS] street_level: result_type=street
+      [PASS] match_type: match_type=full_match
+      [FAIL] confidence: confidence=0.204
+      [PASS] street_present: street=Marwari Dharamsala Road | postcode=848114
+      [PASS] postcode: expected=- | result=848114
+      [PASS] postcode_valid: result=848114
+      [FAIL] city: expected=jamshedpur | result=-
+      [FAIL] expected_state: expected=jharkhand | result=bihar,br
+      [PASS] street: expected=marwari para road jugsalai | result=marwari dharamsala road | house=-
+      [FAIL] state: hint=jamshedpur jharkhand india (Jharkhand) | result=bihar,br
+      [FAIL] area_distance: 320.9 km from city area (verified <= 3.0 km, limit <= 15 km)
+    lookups   : full:3/below_threshold | street_postcode:3/below_threshold | landmark_city:0/no_results | area_city:1/below_threshold
+      full    : 24/approximate/CITY@0.0km Jamshedpur, JH, India | 13/rejected/CITY@508.1km Jamshedpur, UP, India | 2/rejected/CITY@1052.1km Jamshedapur, TG, India
+      street_postcode: 37/rejected/AREA@320.9km Marwari Dharamsala Road, - 848114, BR, India | 37/rejected/AREA@1690.2km Para road, - 679321, KL, India | 36/rejected/AREA@1413.6km Para Road, Mahesana - 384570, GJ, India
+      area_city: 27/approximate/CITY@0.0km Jamshedpur, JH, India
+    verdict   : approximate/CITY | distance=320.9km | reason=pin_fallback | pin_source=city_centre | saved=f5014654-14d5-4432-a788-ee152e3b3309
+    rejected  : Marwari Dharamsala Road, - 848114, BR, India | 25.667471,85.835286 | type=street | precision=AREA
+2026-10-27 18:27:58,336 card-desk.handlers INFO >>> worker called: workers.address (contact cmvqndfrt000t08kz9113wwmb, Hillary Tukamushaba)
+2026-10-27 18:28:02,946 card-desk.address-ai WARNING model rejected temperature; extraction is no longer deterministic across runs
+2026-10-27 18:28:20,977 card-desk.worker.address INFO address: no valid address for M & T Construction Co. Ltd (country_mismatch)
+2026-10-27 18:28:20,988 card-desk.address-attempt INFO ADDRESS_ATTEMPT 7dcccff28d32 (contact cmvqndfrt000t08kz9113wwmb, M & T Construction Co. Ltd)
+  time      : 2026-10-27T12:57:58Z | 22.6s
+  outcome   : FAIL
+  reason    : country_mismatch
+  pages     : 5
+    - https://naro.go.ug/provision-of-ict-infrastructure-networking/ | Provision of ICT Infrastructure Networking – National Agricultural Research Organisation (NARO) - info@naro.go.ug (mailto:info@naro.go.ug) - Mon-Fri (8-5pm) - Plot 11-13, Lugard Avenue, Entebbe - Ugan
+    - https://www.yellow.ug/location/kampala/191 | List of 15,243 Registered Companies in Kampala, Uganda. Page 191 # List of 15,243 Registered Companies in Kampala, Uganda ### RoundBob Kisakye Complex, 67 Spring Rd, Kampala, Uganda Local and internat
+    - https://www.fylings.com/ug | Uganda Company Search, Verify a Registered Company · Fylings Live · verified at search time Company intelligence layer for Africa # Search, verify, and monitor companies across Uganda Look up and veri
+    - https://www.exportgenius.in/company/m-t-construction/309938a1991cc1db5b378f4b21dd8235 | M & T CONSTRUCTION COMPANY LIMITED, Uganda - 4.84 USD Million Imports and 0.00 USD Thousand Exports # M & T Construction Company Limited Trade Data & Insights KAMPALA KAMPALA CENTRAL DIVI KAMPALA CENT
+    - https://linkedin.com/in/micheal-musimenta-a6909346 | # Micheal Musimenta Managing Director at M&T Construction Co Ltd Uganda (UG) 6 connections • 12 followers ## About Managing Director at M&T Construction Co Ltd Total Experience: 26 years and 4 months
+  extracted : -
+  map       : -
+  checks    : 0 failed of 0
+  notes     : no site page with a street address; unscoped search ; search returned 5 results (scoped=False) ; company_match: high=5 medium=0 low=0 none=0 ; pages fetched=5 selected=5 dropped=0 ; address candidates: valid=0 rejected=2 ; rejected address (country_mismatch): other Plot 2D/E Nakasero Hill Road ; rejected address (country_mismatch): other Kakajjo Kyaliwajala Road
+2026-10-27 18:28:21,117 card-desk.handlers INFO >>> worker called: workers.address (contact cmvqnceav000s08kz67ahdpuf, K.S.Y. PRASAD)
+2026-10-27 18:28:35,183 card-desk.address-ai WARNING model rejected temperature; extraction is no longer deterministic across runs
+2026-10-27 18:28:40,144 card-desk.worker.address INFO address: no valid address for DOTT SERVICES LIMITED (country_mismatch)
+2026-10-27 18:28:40,153 card-desk.address-attempt INFO ADDRESS_ATTEMPT 8d9ee12ec9af (contact cmvqnceav000s08kz67ahdpuf, DOTT SERVICES LIMITED)
+  time      : 2026-10-27T12:58:21Z | 19.0s
+  outcome   : FAIL
+  reason    : country_mismatch
+  pages     : 5
+    - https://dottservices.biz/ | Dott Services ### New Technology Proin gravida nibh velit auctor aliquet aenean. ### Accept Insurance Proin gravida nibh velit auctor aliquet aenean. ### Certified Dentist Proin gravida nibh velit auc
+    - https://www.africa2trust.com/B2BAfrica/uganda/building-construction/construction-contractors/dott-services-ltd/Profile/AboutUs/1/1/2671/3 | About DOTT SERVICES LTD (Uganda) Africa2Trust Public Display # DOTT SERVICES LTD Physical Address P.O Box 20005, Kampala, UGANDA, Plot 30, Bukoto Crescent, Naguru, Kawempe, Kampala Contact Phones +256
+    - https://afropitch.com/directory/africa/uganda/kampala/dott-services/ | DOTT Services | Kampala, Uganda | AfroPitch | AfroPitch # DOTT Services Construction & Real Estate· Kampala, Uganda· Africa DOTT SERVICES LIMITED, is a Conspicuous Engineering and Contracting Establis
+    - https://en.wikipedia.org/wiki/Dott_Services | Dott Services | Dott Services Limited | | | --- | --- | | Type | Private | | Industry | Construction | | Founded | 1994; 32 years ago | | Headquarters | 30 Bukoto Crescent Road, Naguru Hill, Kampala,
+    - https://www.devex.com/organizations/dott-services-limited-75598 | Dott Services Limited | Devex ## About M/s DOTT SERVICES LIMITED, is a Conspicuous Engineering and Contracting Establishment registered and incorporated in October 1994 and it is fascinatingly becomin
+  extracted : -
+  map       : -
+  checks    : 0 failed of 0
+  notes     : no site page with a street address; unscoped search ; search returned 5 results (scoped=False) ; company_match: high=5 medium=0 low=0 none=0 ; pages fetched=5 selected=5 dropped=0 ; address candidates: valid=0 rejected=1 ; rejected address (country_mismatch): other Plot 30, Bukoto Crescent
+2026-10-27 18:28:40,280 card-desk.handlers INFO >>> worker called: workers.address (contact cmvqnb2qz000q08kzmfk3068p, 高超)
+2026-10-27 18:28:50,140 card-desk.worker.address INFO fetch failed for https://hf-relay.com: ReadTimeout
+2026-10-27 18:28:58,485 card-desk.worker.address INFO fetch failed for https://hf-relay.com/sitemap.xml: ReadTimeout
+2026-10-27 18:29:06,832 card-desk.worker.address INFO fetch failed for https://hf-relay.com/sitemap_index.xml: ReadTimeout
+2026-10-27 18:29:15,193 card-desk.worker.address INFO fetch failed for https://hf-relay.com/contact: ReadTimeout
+2026-10-27 18:29:23,540 card-desk.worker.address INFO fetch failed for https://hf-relay.com/contact-us: ReadTimeout
+2026-10-27 18:29:31,884 card-desk.worker.address INFO fetch failed for https://hf-relay.com/contactus: ReadTimeout
+2026-10-27 18:29:40,230 card-desk.worker.address INFO fetch failed for https://hf-relay.com/about: ReadTimeout
+2026-10-27 18:29:48,559 card-desk.worker.address INFO fetch failed for https://hf-relay.com/about-us: ReadTimeout
+2026-10-27 18:29:56,904 card-desk.worker.address INFO fetch failed for https://hf-relay.com/reach-us: ReadTimeout
+2026-10-27 18:30:05,275 card-desk.worker.address INFO fetch failed for https://hf-relay.com/locations: ReadTimeout
+2026-10-27 18:30:07,887 card-desk.address-ai WARNING model rejected temperature; extraction is no longer deterministic across runs
+2026-10-27 18:30:14,459 card-desk.worker.address INFO address: no valid address for 厦门宏发电力电器有限公司 (incomplete)
+2026-10-27 18:30:14,460 card-desk.address-attempt INFO ADDRESS_ATTEMPT 4b0c24f1755e (contact cmvqnb2qz000q08kzmfk3068p, 厦门宏发电力电器有限公司)
+  time      : 2026-10-27T12:58:40Z | 94.2s
+  outcome   : FAIL
+  reason    : incomplete
+  pages     : 5
+    - https://baike.baidu.com/item/%E5%8E%A6%E9%97%A8%E5%AE%8F%E5%8F%91%E7%94%B5%E5%8A%9B%E7%94%B5%E5%99%A8%E6%9C%89%E9%99%90%E5%85%AC%E5%8F%B8/20076111 | 厦门宏发电力电器有限公司_百度百科 登录 登录 秒懂百科 特色百科 知识专题加入百科 百科团队 权威合作 收藏 0有用+1 0 # 厦门宏发电力电器有限公司 公司 厦门宏发电力电器有限公司于2001年1月3日在厦门市市场监督管理局登记成立。法定代表人郭满金，公司经营范围包括研制、生产、销售电力电器产品、电子元件；批发零售电力电器产品等。 相关视频 查看全部 ## 目录 1. 1企业信息 ## 企业
+    - https://career.csu.edu.cn/largefairs/company/id/1303/sid/487/stype/1 | 中南大学就业信息网 # 中南大学2026届春季首场大型综合双选会暨湖南省高校毕业生综合类常设市场专场招聘会邀请函 厦门宏发电力电器有限公司 : 二维码 扫描二维码，在手机中查看 - 举办时间： 2026-03-15 14:00 - 举办城市：湖南省 - 长沙市 - 举办地址：中南大学潇湘校区体育场副场 - 主办：中南大学 - 承办：就业指导中心 - 展位号： 536 展位预订报名表 | 单位全称
+    - https://dinggc.cbi360.net/company/c4101050554082394112/ | 厦门宏发电力电器有限公司_联系方式_参建项目 - 盯工程 ### 法人 郭满金 经营状态 存续 成立时间 2001-01-03 注册资本金 72600万人民币 经营期限 2001-01-03 至 2031-01-02 ### 登记机关 厦门市市场监督管理局 企业官网 https://www.hongfa.cn 联系方式 邮箱 1129519@hongfa.cn 统一信用代码 91350200705
+    - https://m.zhipin.com/companys/cfbf990ad6174c1c1nFz3Nw~.html | 「厦门宏发电力电器有限公司招聘」-BOSS直聘 # 厦门宏发电力电器有限公司 1000-9999人 · 电气机械/器材 · 福建省 #### 公司简介 宏发电力是厦门宏发电力电器有限公司旗下品牌。厦门宏发电力电器有限公司是厦门宏发电声股份有限公司（股票代码：SH600885）的全资子公司，位于中国福建省厦门市海沧区一农路93号（原地址：厦门市集美北部工业区，因公司规模扩大搬迁至海沧区）。始创于20
+    - https://www.ubaike.cn/show_5508305.html | 厦门宏发电力电器有限公司_郭满金_工商注册信息_红盾查询网 # 厦门宏发电力电器有限公司 法定代表人：郭满金 更新信息 地址：厦门市海沧区一农路93号 工商注册信息 | 统一社会信用代码 | 913502007054596398 | | --- | --- | | 企业名称 | 厦门宏发电力电器有限公司 | | 注册号 | 350200200007178 | | 法定代表人 | 郭满金 | | 企
+  extracted : -
+  map       : -
+  checks    : 0 failed of 0
+  review    : low_company_match
+  notes     : no site page with a street address; unscoped search ; search returned 5 results (scoped=False) ; company_match: high=0 medium=0 low=4 none=1 ; company_filter_fallback: no high/medium match; keeping best pages as low-trust ; pages fetched=5 selected=5 dropped=0 ; address candidates: valid=0 rejected=1 ; rejected address (incomplete): other 一农路93号
+2026-10-27 18:30:14,586 card-desk.handlers INFO >>> worker called: workers.address (contact cmvqna5ve000o08kza1x1lk6n, Kamal Jain)
+2026-10-27 18:30:24,388 card-desk.address-ai WARNING model rejected temperature; extraction is no longer deterministic across runs
+2026-10-27 18:30:30,827 card-desk.address-ai WARNING model rejected temperature; extraction is no longer deterministic across runs
+2026-10-27 18:30:33,734 card-desk.worker.address INFO address: no valid address for Cargomen Logistics (India) Pvt. Ltd. (incomplete_extraction)
+2026-10-27 18:30:33,743 card-desk.address-attempt INFO ADDRESS_ATTEMPT 955da418ee6c (contact cmvqna5ve000o08kza1x1lk6n, Cargomen Logistics (India) Pvt. Ltd.)
+  time      : 2026-10-27T13:00:14Z | 19.2s
+  outcome   : FAIL
+  reason    : incomplete_extraction
+  pages     : 5
+    - https://cargomen.com/about-us/ | About Us — Cargomen Logistics India | Cargomen Logistics India Pvt Ltd Latest Cargomen Industry news & global trade updates from Cargomen and the WTO Cargomen Request a freight quote and hear back wit
+    - https://cargomen.com/about/csr/ | Corporate Social Responsibility — Cargomen Logistics | Cargomen Logistics India Pvt Ltd Latest Cargomen Industry news & global trade updates from Cargomen and the WTO Cargomen Request a freight quote
+    - https://cargomen.com/about/our-journey/ | Our Journey — 26 Years of Logistics Excellence | Cargomen Logistics India Pvt Ltd Latest Cargomen Industry news & global trade updates from Cargomen and the WTO Cargomen Request a freight quote and he
+    - https://cargomen.com/about/vision/ | Vision & Mission — Cargomen Logistics India | Cargomen Logistics India Pvt Ltd Latest Cargomen Industry news & global trade updates from Cargomen and the WTO Cargomen Request a freight quote and hear
+    - https://cargomen.com/about/what-sets-us-apart/ | About Us — Cargomen Logistics India | Cargomen Logistics India Pvt Ltd Latest Cargomen Industry news & global trade updates from Cargomen and the WTO Cargomen Request a freight quote and hear back wit
+  extracted : -
+  map       : -
+  checks    : 0 failed of 0
+  notes     : company_match: high=7 medium=0 low=0 none=0 ; pages fetched=7 selected=5 dropped=2 ; search returned 5 results (scoped=False) ; address candidates: valid=0 rejected=0
+2026-10-27 18:30:33,871 card-desk.handlers INFO >>> worker called: workers.address (contact cmvqn9c29000n08kz59csh3tl, Amrendra Kr. Tiwari)
+2026-10-27 18:30:36,277 card-desk.address-ai WARNING model rejected temperature; extraction is no longer deterministic across runs
+2026-10-27 18:30:51,679 card-desk.worker.address INFO address: approximate for Winpower Infra Pvt. Ltd. (1 location(s))
+2026-10-27 18:30:51,681 card-desk.address-attempt INFO ADDRESS_ATTEMPT 1a6722cf4fb5 (contact cmvqn9c29000n08kz59csh3tl, Winpower Infra Pvt. Ltd.)
+  time      : 2026-10-27T13:00:33Z | 17.8s
+  outcome   : PASS
+  reason    : approximate
+  pages     : 5
+    - https://cleartax.in/f/company/win-power-infra-private-limited/U74899DL1993PTC053418/ | WIN POWER INFRA PRIVATE LIMITED # WIN POWER INFRA PRIVATE LIMITED WIN POWER INFRA PRIVATE LIMITED's Corporate Identification Number (CIN) is U74899DL1993PTC053418. You can contact them by sending an e
+    - https://www.addressadda.com/company/delhi/win-power-infra-private-limited-U74899DL1993PTC053418 | Win Power Infra Private Limited - CIN U74899DL1993PTC053418 | Address Adda # Win Power Infra Private Limited - CIN U74899DL1993PTC053418 | Address Adda Delhi Registration Date: 05 May 1993 ###### Comp
+    - https://www.instafinancials.com/company/win-power-infra-private-limited-U74899AS1993PTC019641 | WIN POWER INFRA PRIVATE LIMITED - U74899AS1993PTC019641 ### Company Overview WIN POWER INFRA PRIVATE LIMITED is a 33.5 Years old company, incorporated on 05 May 1993. The current status of the company
+    - https://www.devex.com/organizations/winpower-infra-pvt-ltd-56002 | Winpower Infra Pvt. Ltd. | Devex ## About WIN POWER INFRA PVT. LTD., a member of the Singhi Group of Companies, is a leading quality-driven organization for world-class civil and electrical constructi
+    - https://linkedin.com/company/win-power-infra-pvt-ltd | # Win Power Infra Pvt Ltd Win Power Infra Pvt Ltd is a Utilities company. Win Power Infra Pvt Ltd employs 15 people, founded in 1993. Headquartered in Guwahati, India, with presence in United States.
+  extracted : line1=BASANTA ENCLAVE DR. B.B ROAD | line2=- | city=KAMRUP | state=Assam | pin=781007 | country=India | evidence=https://www.instafinancials.com/company/win-power-infra-private-limited-U74899AS1993PTC019641
+  map       : 781007, AS, India | lat=26.171906854545455 lon=91.76310675454545 | type=postcode | match=full_match conf=1 | precision=AREA | place=514888b6bdd6f0564059203b6e16022c3a40c002079203093738313030372b696e
+  checks    : 4 failed of 11
+    [PASS] country: expected=in | result=in
+    [FAIL] street_level: result_type=postcode
+    [PASS] match_type: match_type=full_match
+    [PASS] confidence: confidence=1.0
+    [FAIL] street_present: street=- | postcode=781007
+    [PASS] postcode: expected=781007 | result=781007
+    [PASS] postcode_valid: result=781007
+    [FAIL] city: expected=kamrup | result=-
+    [PASS] expected_state: expected=assam | result=as,assam
+    [FAIL] street: expected=basanta enclave dr b b road | result=- | house=-
+    [PASS] area_distance: 0.0 km from pin area (verified <= 3.0 km, limit <= 10 km)
+  review    : city_mismatch ; pin_fallback
+  notes     : no site page with a street address; unscoped search ; search returned 5 results (scoped=False) ; company_match: high=5 medium=0 low=0 none=0 ; pages fetched=5 selected=5 dropped=0 ; address candidates: valid=1 rejected=1 ; rejected address (country_mismatch): other 20, ANSARI ROAD ; area from pin 781007 (Kamrup, geoapify) ; full: no result above score 50 ; street_postcode: no result above score 50 ; area_city: no result above score 30 ; saved approximate/AREA from pin_centre (map: city_mismatch) ; primary location: 9ebafca6-cdc0-40db-9385-f357177d650d ; saved locations: 1 of 1 candidates
+  lookups   : full:3/below_threshold | street_postcode:1/below_threshold | area_city:1/below_threshold
+              worked: -
+  candidates: 1 (saved=1, primary=1)
+  candidate 1/1:
+    type      : registered
+    extracted : line1=BASANTA ENCLAVE DR. B.B ROAD | line2=- | city=KAMRUP | state=Assam | pin=781007 | country=India | evidence=https://www.instafinancials.com/company/win-power-infra-private-limited-U74899AS1993PTC019641
+    map       : 781007, AS, India | lat=26.171906854545455 lon=91.76310675454545 | type=postcode | precision=AREA
+    checks    : 4 failed of 11
+      [PASS] country: expected=in | result=in
+      [FAIL] street_level: result_type=postcode
+      [PASS] match_type: match_type=full_match
+      [PASS] confidence: confidence=1.0
+      [FAIL] street_present: street=- | postcode=781007
+      [PASS] postcode: expected=781007 | result=781007
+      [PASS] postcode_valid: result=781007
+      [FAIL] city: expected=kamrup | result=-
+      [PASS] expected_state: expected=assam | result=as,assam
+      [FAIL] street: expected=basanta enclave dr b b road | result=- | house=-
+      [PASS] area_distance: 0.0 km from pin area (verified <= 3.0 km, limit <= 10 km)
+    lookups   : full:3/below_threshold | street_postcode:1/below_threshold | area_city:1/below_threshold
+      full    : 34/rejected/AREA@0.0km 781007, AS, India | 29/rejected/AREA@5.0km Dr Zakir Hussain Rd, Guwahati - 781007, AS, India | 28/rejected/AREA@4.9km Dr. RP Road, Guwahati - 781007, AS, India
+      street_postcode: 31/rejected/AREA@0.0km 781007, AS, India
+      area_city: 36/rejected/AREA@0.0km 781007, AS, India
+    verdict   : approximate/AREA | distance=0.0km | reason=pin_fallback | pin_source=pin_centre | saved=9ebafca6-cdc0-40db-9385-f357177d650d
+    rejected  : 781007, AS, India | 26.171906854545455,91.76310675454545 | type=postcode | precision=AREA
+2026-10-27 18:30:51,682 card-desk.handlers INFO >>> worker called: workers.address (contact cmvqn5ftd000k08kzp6ufxs4a, Sandeep Singh Chauhan)
+2026-10-27 18:30:54,239 card-desk.address-ai WARNING model rejected temperature; extraction is no longer deterministic across runs
+2026-10-27 18:31:29,008 card-desk.worker.address INFO address: approximate for APCO Infratech Pvt. Ltd. (3 location(s))
+2026-10-27 18:31:29,009 card-desk.address-attempt INFO ADDRESS_ATTEMPT 54aa9bb6fbae (contact cmvqn5ftd000k08kzp6ufxs4a, APCO Infratech Pvt. Ltd.)
+  time      : 2026-10-27T13:00:51Z | 37.3s
+  outcome   : PASS
+  reason    : approximate
+  pages     : 5
+    - https://aeonaxisoftech.com/apco/contact/ | Contact – APCO Infratech Private Limited # Contact APCO INFRATECH PVT. LTD is an ISO 9001:2015 &OHSAS 18001:2007 certified professionally managed organization with a dedicated team of 3000 engineers a
+    - https://apcoinfra.com/contact/ | Build the Future with APCO ## Let’s Build the Future Together Connect with APCO to explore opportunities in infrastructure development, engineering collaboration and strategic partnerships. 0522-40361
+    - https://gst.jamku.app/gstin/06AADCA5639H1ZQ | APCO INFRATECH PRIVATE LIMITED 06AADCA5639H1ZQ GST Details # GST Details of APCO INFRATECH PRIVATE LIMITED 06AADCA5639H1ZQ Haryana Trade Name ## apco infratech private limited Legal Name ## apco infra
+    - https://piceapp.com/gst-number-search/apco-infratech-private-limited-06aadca5639h1zq/ | GST Number for APCO INFRATECH PRIVATE LIMITED is 06AADCA5639H1ZQ # APCO INFRATECH PRIVATE LIMITED 06AADCA5639H1ZQ | Gurugram GSTIN Details As of 11 May 2026 ### APCO INFRATECH PRIVATE LIMITED ## Trade
+    - https://www.tradeindia.com/apco-infratech-pvt-ltd-10257307/ | Apco Infratech Pvt. Ltd. in Gurugram, Haryana, India - Company Profile 011 - 43364336 (01143364336) Gurugram, Haryana, India| GST 06AADCA5639H1ZQ # Apco Infratech Pvt. Ltd. GST 06AADCA5639H1ZQ Rating
+  extracted : line1=B-9, Vibhuti Khand | line2=APCO House, Gomti Nagar | city=Lucknow | state=Uttar Pradesh | pin=226010 | country=India | evidence=https://aeonaxisoftech.com/apco/contact/
+  map       : 226010, UP, India | lat=26.855124394999997 lon=81.0021663625 | type=postcode | match=full_match conf=1 | precision=AREA | place=51af05627e23405440596a89ae6ee9da3a40c002079203093232363031302b696e
+  checks    : 5 failed of 12
+    [PASS] country: expected=in | result=in
+    [FAIL] street_level: result_type=postcode
+    [PASS] match_type: match_type=full_match
+    [PASS] confidence: confidence=1.0
+    [FAIL] street_present: street=- | postcode=226010
+    [PASS] postcode: expected=226010 | result=226010
+    [PASS] postcode_valid: result=226010
+    [FAIL] city: expected=lucknow | result=-
+    [PASS] expected_state: expected=uttar pradesh | result=up,uttar pradesh
+    [FAIL] street: expected=b 9 vibhuti khand apco house gomti nagar | result=- | house=-
+    [FAIL] state: hint=gurugram haryana (Haryana) | result=up,uttar pradesh
+    [PASS] area_distance: 0.0 km from pin area (verified <= 3.0 km, limit <= 10 km)
+  review    : city_mismatch ; pin_fallback
+  notes     : no site page with a street address; unscoped search ; search returned 5 results (scoped=False) ; company_match: high=5 medium=0 low=0 none=0 ; pages fetched=5 selected=5 dropped=0 ; address candidates: valid=4 rejected=0 ; other address: registered B-9, Vibhuti Khand ; other address: branch 608/1-B/2, Western Expressway Highway Service Road ; other address: other Universal Trade Tower, Sec 49 Sohna Road ; area from pin 122101 (Gurgaon, geoapify) ; saved approximate/STREET at Gurugram ; area from pin 122002 (Gurgaon, geoapify) ; full: no result above score 50 ; street_postcode: no result above score 50 ; saved approximate/AREA at Gurugram ; area from pin 226010 (Lucknow, geoapify) ; full: no result above score 50 ; street_postcode: no result above score 50 ; landmark results filtered: 3 outside name overlap or 2 km ; area_city: no result above score 30 ; saved approximate/AREA from pin_centre (map: city_mismatch) ; primary location: 669c1344-0883-4c5b-bd20-7c1dafaa00cc ; saved locations: 3 of 3 candidates
+  lookups   : full:3/approximate/STREET@1.1km | full:3/below_threshold | street_postcode:3/below_threshold | area_city:2/approximate/AREA@0.0km | full:3/below_threshold | street_postcode:3/below_threshold | landmark_city:0/no_results | area_city:1/below_threshold
+              worked: full
+  candidates: 3 (saved=3, primary=3)
+  candidate 1/3:
+    type      : head_office
+    extracted : line1=Universal Trade Tower, Sohna Road | line2=4th Floor, Sector 49 | city=Gurugram | state=Haryana | pin=122101 | country=India | evidence=https://aeonaxisoftech.com/apco/contact/
+    map       : Sohna Road, Badshahpur, Gurgaon - 122101, HR, India | lat=28.3910396 lon=77.0488731 | type=street | precision=STREET
+    checks    : 0 failed of 12
+      [PASS] country: expected=in | result=in
+      [PASS] street_level: result_type=street
+      [PASS] match_type: match_type=match_by_street
+      [PASS] confidence: confidence=0.5
+      [PASS] street_present: street=Sohna Road | postcode=122101
+      [PASS] postcode: expected=122101 | result=122101
+      [PASS] postcode_valid: result=122101
+      [PASS] city: expected=gurugram | result=gurgaon
+      [PASS] expected_state: expected=haryana | result=haryana,hr
+      [PASS] street: expected=universal trade tower sohna road 4th floor sector 49 | result=sohna road | house=-
+      [PASS] state: hint=gurugram haryana (Haryana) | result=haryana,hr
+      [PASS] area_distance: 1.1 km from pin area (verified <= 3.0 km, limit <= 10 km)
+    lookups   : full:3/approximate/STREET@1.1km
+      full    : 79/approximate/STREET@1.1km Sohna Road, Badshahpur, Gurgaon - 122101, HR, India | 79/approximate/STREET@1.5km Sohna Road, Sector 48, Gurgaon - 122101, HR, India | 73/approximate/AREA@1.2km Sohna Road, Sector 49, Gurgaon - 122101, HR, India
+    verdict   : approximate/STREET | distance=1.1km | reason=ok | pin_source=map | saved=669c1344-0883-4c5b-bd20-7c1dafaa00cc
+  candidate 2/3:
+    type      : other
+    extracted : line1=Universal Trade Tower, Sec 49 Sohna Road | line2=4th Floor, Unit No 429 | city=Gurugram | state=Haryana | pin=122002 | country=India | evidence=https://gst.jamku.app/gstin/06AADCA5639H1ZQ
+    map       : Gurgaon - 122002, HR, India | lat=28.46586008 lon=77.087626806 | type=postcode | precision=AREA
+    checks    : 3 failed of 12
+      [PASS] country: expected=in | result=in
+      [FAIL] street_level: result_type=postcode
+      [PASS] match_type: match_type=full_match
+      [PASS] confidence: confidence=1.0
+      [FAIL] street_present: street=- | postcode=122002
+      [PASS] postcode: expected=122002 | result=122002
+      [PASS] postcode_valid: result=122002
+      [PASS] city: expected=gurugram | result=gurgaon
+      [PASS] expected_state: expected=haryana | result=haryana,hr
+      [FAIL] street: expected=universal trade tower sec 49 sohna road 4th floor unit no 429 | result=- | house=-
+      [PASS] state: hint=gurugram haryana (Haryana) | result=haryana,hr
+      [PASS] area_distance: 0.0 km from pin area (verified <= 3.0 km, limit <= 10 km)
+    lookups   : full:3/below_threshold | street_postcode:3/below_threshold | area_city:2/approximate/AREA@0.0km
+      full    : 89/rejected/BUILDING@6.9km 49, Sohna Road, Sector 48, Gurgaon - 122018, HR, India | 89/rejected/BUILDING@7.2km 49, Sohna Road, Sector 49, Gurgaon - 122018, HR, India | 88/rejected/BUILDING@7.9km 49, Sohna Road, Sector 49, Gurgaon - 122101, HR, India
+      street_postcode: 54/rejected/AREA@7.3km Tower B1-4, Spaze IT Park, Sohna Road, Gurugram - 122018, HR, India | 53/rejected/AREA@7.8km Vatika Business Park, Sohna Road, Sector 49, Gurgaon - 122018, HR, Ind | 53/rejected/AREA@7.3km Tower B1-4, Spaze IT Park, Sohna Road, Sector 49, Gurgaon - 122018, HR
+      area_city: 46/approximate/AREA@0.0km Gurgaon, Gurgaon - 122002, HR, India | 46/approximate/AREA@0.0km Gurgaon - 122002, HR, India
+    verdict   : approximate/AREA | distance=0.0km | reason=not_street_level | pin_source=map | saved=5ff114d1-d741-4670-8709-73684f7b1bfa
+  candidate 3/3:
+    type      : registered
+    extracted : line1=B-9, Vibhuti Khand | line2=APCO House, Gomti Nagar | city=Lucknow | state=Uttar Pradesh | pin=226010 | country=India | evidence=https://aeonaxisoftech.com/apco/contact/
+    map       : 226010, UP, India | lat=26.855124394999997 lon=81.0021663625 | type=postcode | precision=AREA
+    checks    : 5 failed of 12
+      [PASS] country: expected=in | result=in
+      [FAIL] street_level: result_type=postcode
+      [PASS] match_type: match_type=full_match
+      [PASS] confidence: confidence=1.0
+      [FAIL] street_present: street=- | postcode=226010
+      [PASS] postcode: expected=226010 | result=226010
+      [PASS] postcode_valid: result=226010
+      [FAIL] city: expected=lucknow | result=-
+      [PASS] expected_state: expected=uttar pradesh | result=up,uttar pradesh
+      [FAIL] street: expected=b 9 vibhuti khand apco house gomti nagar | result=- | house=-
+      [FAIL] state: hint=gurugram haryana (Haryana) | result=up,uttar pradesh
+      [PASS] area_distance: 0.0 km from pin area (verified <= 3.0 km, limit <= 10 km)
+    lookups   : full:3/below_threshold | street_postcode:3/below_threshold | landmark_city:0/no_results | area_city:1/below_threshold
+      full    : 33/rejected/AREA@1.9km 1/194, Shaheed Path Flyover, Gomti Nagar, Gwari - 226010, UP, India | 32/rejected/AREA@2.2km U Nagar and Co, 6/207, Doctor Akhilesh Das Gupta Marg, Vijay Khand, Gw | 32/rejected/AREA@2.6km Vidhik Law Chambers (Advocates & Solicitors), 2/513, Vidhik Law Chambe
+      street_postcode: 33/rejected/AREA@1.9km 1/194, Shaheed Path Flyover, Gomti Nagar, Gwari - 226010, UP, India | 32/rejected/AREA@2.2km 6/207, Doctor Akhilesh Das Gupta Marg, Vijay Khand, Gwari - 226010, UP | 32/rejected/AREA@2.6km 2/513, Vidhik Law Chambers Road, बड़ा भरवांरा - 226010, UP, India
+      area_city: 36/rejected/AREA@0.0km 226010, UP, India
+    verdict   : approximate/AREA | distance=0.0km | reason=pin_fallback | pin_source=pin_centre | saved=84dc1d2f-3cdc-40f3-8d91-3dc8c0f4ed4e
+    rejected  : 226010, UP, India | 26.855124394999997,81.0021663625 | type=postcode | precision=AREA
+2026-10-27 18:31:29,010 card-desk.handlers INFO >>> worker called: workers.address (contact cmvqn43ui000j08kzsdc3u0h4, Deepak Khajaria)
+2026-10-27 18:31:37,514 card-desk.address-ai WARNING model rejected temperature; extraction is no longer deterministic across runs
+2026-10-27 18:31:56,339 card-desk.worker.address INFO address: approximate for Universal MEP Projects & Engineering Services Limited (2 location(s))
+2026-10-27 18:31:56,339 card-desk.address-attempt INFO ADDRESS_ATTEMPT a2b51b567ed2 (contact cmvqn43ui000j08kzsdc3u0h4, Universal MEP Projects & Engineering Services Limited)
+  time      : 2026-10-27T13:01:29Z | 27.3s
+  outcome   : PASS
+  reason    : approximate
+  pages     : 5
+    - https://indialei.in/detailed-information/346947/3358008JRXETH1IB9K55/universal-mep-projects-engineering-services-limited/ | UNIVERSAL MEP PROJECTS & ENGINEERING SERVICES LIMITED - 3358008JRXETH1IB9K55 (Issued) - India LEI +91 8800973322 info@indialei.in EQS LEI: 529900F6BNUR3RJ2WH29 E-mail: info@indialei.in Phone: +91 8800
+    - https://www.indiafilings.com/search/universal-mep-projects-engineering-services-limited-cin-U74210MH1983PLC030705 | UNIVERSAL MEP PROJECTS ENGINEERING SERVICES LIMITED | CIN & Registration Details # UNIVERSAL MEP PROJECTS & ENGINEERING SERVICES LIMITED CIN : U74210MH1983PLC030705 ROC : RoC-Mumbai Active Last Update
+    - https://www.inspex.in/company/UNIVERSAL-MEP-PROJECTS-ENGINEERING-SERVICES-LIMITED-U74210MH1983PLC030705 | UNIVERSAL MEP PROJECTS & ENGINEERING SERVICES LIMITED Looks healthy— Healthy Active and broadly compliant 94 Score · 100 # UNIVERSAL MEP PROJECTS & ENGINEERING SERVICES LIMITED U74210MH1983PLC030705 A
+    - https://www.lei-lookup.com/record/3358008JRXETH1IB9K55/ | UNIVERSAL MEP PROJECTS & ENGINEERING SERVICES LIMITED - LEI: 3358008JRXETH1IB9K55 | LEI Lookup # UNIVERSAL MEP PROJECTS & ENGINEERING SERVICES LIMITED ## 3358008JRXETH1IB9K55 3358008JRXETH1IB9K55 ISSU
+    - https://exa.ai/library/place/9th60125sgp | # Universal MEP Projects & Engineering Services Limited Universal MEP Projects & Engineering Services Limited is an engineer in Ghodapdeo, Byculla East, Chinchpokli, State of Mahārāshtra, India. ## Lo
+  extracted : line1=Voltas House, T.B, Kadam Marg | line2=B 2nd Floor, Ghodapdeo, Byculla East, Chinchpokli | city=Mumbai | state=Maharashtra | pin=400033 | country=India | evidence=https://exa.ai/library/place/9th60125sgp
+  map       : Heramb Darshan, Keshavrao Borkar Marg, E Ward, Mumbai Zone 1, Mumbai - 400033, MH, India | lat=18.9809105 lon=72.839472 | type=building | match=full_match conf=0.17224880382775118 | precision=AREA | place=51187ac4e8b93552405992cd55f31cfb3240f00102f901627f0d1500000000c00203
+  checks    : 1 failed of 12
+    [PASS] country: expected=in | result=in
+    [PASS] street_level: result_type=building
+    [PASS] match_type: match_type=full_match
+    [FAIL] confidence: confidence=0.17224880382775118
+    [PASS] street_present: street=Keshavrao Borkar Marg | postcode=400033
+    [PASS] postcode: expected=400033 | result=400033
+    [PASS] postcode_valid: result=400033
+    [PASS] city: expected=mumbai | result=mumbai
+    [PASS] expected_state: expected=maharashtra | result=maharashtra,mh
+    [PASS] street: expected=voltas house t b kadam marg b 2nd floor ghodapdeo byculla east chinchpokli | result=keshavrao borkar marg | house=heramb darshan
+    [PASS] state: hint=mumbai (Maharashtra) | result=maharashtra,mh
+    [PASS] area_distance: 1.5 km from pin area (verified <= 3.0 km, limit <= 10 km)
+  notes     : no site page with a street address; unscoped search ; search returned 5 results (scoped=False) ; company_match: high=5 medium=0 low=0 none=2 ; pages fetched=7 selected=5 dropped=2 ; address candidates: valid=2 rejected=0 ; other address: other Voltas House, T.B, Kadam Marg ; area from pin 400033 (Mumbai, geoapify) ; saved approximate/STREET at MUMBAI ; area from pin 400033 (Mumbai, geoapify) ; landmark results filtered: 2 outside name overlap or 2 km ; area_city: no result above score 30 ; saved approximate/AREA at Mumbai ; primary location: 7908307d-bfa6-4758-a7e4-da6a4051f2ff ; saved locations: 2 of 2 candidates
+  lookups   : full:3/approximate/STREET@0.9km | full:3/approximate/AREA@1.5km | street_postcode:3/approximate/AREA@1.4km | landmark_city:0/no_results | area_city:3/below_threshold
+              worked: full
+  candidates: 2 (saved=2, primary=2)
+  candidate 1/2:
+    type      : registered
+    extracted : line1=VOLTAS HOUSE 'A' DR BABASAHEB AMBEDKAR ROAD | line2=CHINCHPOKLI | city=MUMBAI | state=Maharashtra | pin=400033 | country=India | evidence=https://indialei.in/detailed-information/346947/3358008JRXETH1IB9K55/universal-mep-projects-engineering-services-limited/
+    map       : Dr Babasaheb Ambedkar Marg, Lalbaug, Mumbai Zone 2, Mumbai - 400033, MH, India | lat=18.9929949 lon=72.8363827 | type=street | precision=STREET
+    checks    : 1 failed of 12
+      [PASS] country: expected=in | result=in
+      [PASS] street_level: result_type=street
+      [PASS] match_type: match_type=match_by_street
+      [FAIL] confidence: confidence=0.45
+      [PASS] street_present: street=Dr Babasaheb Ambedkar Marg | postcode=400033
+      [PASS] postcode: expected=400033 | result=400033
+      [PASS] postcode_valid: result=400033
+      [PASS] city: expected=mumbai | result=mumbai
+      [PASS] expected_state: expected=maharashtra | result=maharashtra,mh
+      [PASS] street: expected=voltas house a dr babasaheb ambedkar road chinchpokli | result=dr babasaheb ambedkar marg | house=-
+      [PASS] state: hint=mumbai (Maharashtra) | result=maharashtra,mh
+      [PASS] area_distance: 0.9 km from pin area (verified <= 3.0 km, limit <= 10 km)
+    lookups   : full:3/approximate/STREET@0.9km
+      full    : 79/approximate/STREET@0.9km Dr Babasaheb Ambedkar Marg, Lalbaug, Mumbai Zone 2, Mumbai - 400033, M | 64/rejected/STREET@1.0km Dr Babasaheb Ambedkar Marg, Lalbaug, Mumbai Zone 2, Mumbai - 400011, M | 64/rejected/STREET@1.3km Dr Babasaheb Ambedkar Marg, Byculla East, Mumbai Zone 1, Mumbai - 4000
+    verdict   : approximate/STREET | distance=0.9km | reason=low_confidence | pin_source=map | saved=7908307d-bfa6-4758-a7e4-da6a4051f2ff
+  candidate 2/2:
+    type      : other
+    extracted : line1=Voltas House, T.B, Kadam Marg | line2=B 2nd Floor, Ghodapdeo, Byculla East, Chinchpokli | city=Mumbai | state=Maharashtra | pin=400033 | country=India | evidence=https://exa.ai/library/place/9th60125sgp
+    map       : Heramb Darshan, Keshavrao Borkar Marg, E Ward, Mumbai Zone 1, Mumbai - 400033, MH, India | lat=18.9809105 lon=72.839472 | type=building | precision=AREA
+    checks    : 1 failed of 12
+      [PASS] country: expected=in | result=in
+      [PASS] street_level: result_type=building
+      [PASS] match_type: match_type=full_match
+      [FAIL] confidence: confidence=0.17224880382775118
+      [PASS] street_present: street=Keshavrao Borkar Marg | postcode=400033
+      [PASS] postcode: expected=400033 | result=400033
+      [PASS] postcode_valid: result=400033
+      [PASS] city: expected=mumbai | result=mumbai
+      [PASS] expected_state: expected=maharashtra | result=maharashtra,mh
+      [PASS] street: expected=voltas house t b kadam marg b 2nd floor ghodapdeo byculla east chinchpokli | result=keshavrao borkar marg | house=heramb darshan
+      [PASS] state: hint=mumbai (Maharashtra) | result=maharashtra,mh
+      [PASS] area_distance: 1.5 km from pin area (verified <= 3.0 km, limit <= 10 km)
+    lookups   : full:3/approximate/AREA@1.5km | street_postcode:3/approximate/AREA@1.4km | landmark_city:0/no_results | area_city:3/below_threshold
+      full    : 71/approximate/AREA@1.5km Heramb Darshan, Keshavrao Borkar Marg, E Ward, Mumbai Zone 1, Mumbai - | 71/approximate/AREA@1.4km Heramb Darshan, Keshavrao Borkar Marg, Mazgaon, Mumbai - 400033, MH, I | 71/approximate/AREA@1.4km Shri Kapreshwar Maharaj Temple, opposite to Chaskar Chawl, Dhaku Prabh
+      street_postcode: 70/approximate/AREA@1.4km opposite to Chaskar Chawl, Dhaku Prabhuchi Wadi, Ghodapdeo, Keshavrao  | 70/approximate/AREA@1.4km Heramb Darshan, Keshavrao Borkar Marg, Mazgaon, Mumbai - 400033, MH, I | 70/approximate/AREA@1.5km Heramb Darshan, Keshavrao Borkar Marg, E Ward, Mumbai - 400033, MH, In
+      area_city: 36/rejected/AREA@0.0km F/S Ward, - 400033, MH, India | 35/rejected/AREA@0.0km F/S Ward, - 400033, MH, India, Mumbai Zone 2 | 23/rejected/CITY@7.4km Mumbai - 400051, MH, India
+    verdict   : approximate/AREA | distance=1.5km | reason=low_confidence | pin_source=map | saved=4bed2a32-8e43-423e-a3a3-33e9305f6ba1
+2026-10-27 18:31:56,340 card-desk.handlers INFO >>> worker called: workers.address (contact cmvqn1xbw000i08kz7vnufy7e, Pradeep S Morab)
+2026-10-27 18:32:07,494 card-desk.address-ai WARNING model rejected temperature; extraction is no longer deterministic across runs
+2026-10-27 18:32:32,992 card-desk.worker.address INFO address: approximate for Blue Star Limited (2 location(s))
+2026-10-27 18:32:32,992 card-desk.address-attempt INFO ADDRESS_ATTEMPT ef4f1a84c97e (contact cmvqn1xbw000i08kz7vnufy7e, Blue Star Limited)
+  time      : 2026-10-27T13:01:56Z | 36.7s
+  outcome   : PASS
+  reason    : approximate
+  pages     : 5
+    - https://www.bluestarindia.com/about-us/our-company/credo | Blue Star Limited - Your Cooling and Refrigeration Partner ## Our Origin Story - CIN: L28920MH1949PLC006870 - Telephone No.: +91 22 6654 4000 - Email: investors@bluestarindia.com Registered Office: Ka
+    - https://nsearchives.nseindia.com/annual_reports/AR_29774_BLUESTARCO_2025_2026_A_16432255_13072026232241.pdf | Blue Star Limited Band Box House, 4th Floor, 254 D, Dr Annie Besant Road, Worli, Mumbai 400 030, India. T : +91 22 6654 4000 E : secretarialdesk@bluestarindia.com www.bluestarindia.com July 13, 2026 |
+    - https://www.bluestarindia.com/annual-report-2025-2026/index.html | Blue Star Limited # Blue Star Limited ANNUAL REPORT BLUE STAR LIMITED 2025-26 FORWARD-LOOKING STATEMENTS Certain statements in this report regarding our business operations may constitute forward-look
+    - https://www.bluestarindia.com/media/404949/seintimationbrsrfy26.pdf | Registered Office: Kasturi Buildings, Mohan T Advani Chowk, Jamshedji Tata Road, Mumbai 400 020, India. T: +91 22 6665 4000 CIN: L 28920MH1949PLC 006870 Blue Star Limited Band Box House, 4th Floor, 25
+    - https://www.bluestarindia.com/about-us | About Blue Star - 80+ Years of HVAC&R Innovation & Excellence Dealer Locator Contact Us Our Global Presence Buy Now About Us Products Projects Services Investors & Press Over 80 Years of Innovation an
+  extracted : line1=Band Box House, 4th Floor, 254 D, Dr Annie Besant Road | line2=Worli | city=Mumbai | state=Maharashtra | pin=400030 | country=India | evidence=https://nsearchives.nseindia.com/annual_reports/AR_29774_BLUESTARCO_2025_2026_A_16432255_13072026232241.pdf
+  map       : 254, Doctor Annie Besant Road, Lower Parel, Mumbai - 400030, MH, India | lat=19.01136 lon=72.821124 | type=building | match=match_by_building conf=0.45 | precision=BUILDING | place=517c7dad4b8d34524059897b2c7de8023340c00203e203266f70656e7374726565746d61703a7374
+  checks    : 1 failed of 12
+    [PASS] country: expected=in | result=in
+    [PASS] street_level: result_type=building
+    [PASS] match_type: match_type=match_by_building
+    [FAIL] confidence: confidence=0.45
+    [PASS] street_present: street=Doctor Annie Besant Road | postcode=400030
+    [PASS] postcode: expected=400030 | result=400030
+    [PASS] postcode_valid: result=400030
+    [PASS] city: expected=mumbai | result=mumbai
+    [PASS] expected_state: expected=maharashtra | result=maharashtra,mh
+    [PASS] street: expected=band box house 4th floor 254 d dr annie besant road worli | result=doctor annie besant road | house=254
+    [PASS] state: hint=mumbai india (Maharashtra) | result=maharashtra,mh
+    [PASS] area_distance: 0.5 km from pin area (verified <= 3.0 km, limit <= 10 km)
+  review    : pin_fallback ; postcode_mismatch
+  notes     : no site page with a street address; unscoped search ; search returned 5 results (scoped=False) ; company_match: high=13 medium=0 low=0 none=0 ; pages fetched=13 selected=5 dropped=8 ; address candidates: valid=2 rejected=0 ; other address: other Band Box House, 4th Floor, 254 D, Dr Annie Besant Road ; area from pin 400020 (Mumbai, geoapify) ; full: no result above score 50 ; street_postcode: no result above score 50 ; landmark results filtered: 3 outside name overlap or 2 km ; area_city: no result above score 30 ; saved approximate/AREA from pin_centre (map: postcode_mismatch) ; area from pin 400030 (Mumbai, geoapify) ; saved approximate/BUILDING at Mumbai ; primary location: dfdbd2e8-52fb-4ce4-b0b3-25ce9ed7e85f ; saved locations: 2 of 2 candidates
+  lookups   : full:3/below_threshold | street_postcode:3/below_threshold | landmark_city:0/no_results | area_city:3/below_threshold | full:3/approximate/BUILDING@0.5km
+              worked: full
+  candidates: 2 (saved=2, primary=2)
+  candidate 1/2:
+    type      : registered
+    extracted : line1=Kasturi Buildings, Jamshedji Tata Road | line2=Mohan T Advani Chowk | city=Mumbai | state=Maharashtra | pin=400020 | country=India | evidence=https://www.bluestarindia.com/about-us/our-company/credo
+    map       : Jamshedji Tata Road, Churchgate, Mumbai - 400032, MH, India | lat=18.932665 lon=72.827913 | type=street | precision=STREET
+    checks    : 1 failed of 12
+      [PASS] country: expected=in | result=in
+      [PASS] street_level: result_type=street
+      [PASS] match_type: match_type=match_by_street
+      [PASS] confidence: confidence=0.5
+      [PASS] street_present: street=Jamshedji Tata Road | postcode=400032
+      [FAIL] postcode: expected=400020 | result=400032
+      [PASS] postcode_valid: result=400032
+      [PASS] city: expected=mumbai | result=mumbai
+      [PASS] expected_state: expected=maharashtra | result=maharashtra,mh
+      [PASS] street: expected=kasturi buildings jamshedji tata road mohan t advani chowk | result=jamshedji tata road | house=-
+      [PASS] state: hint=mumbai india (Maharashtra) | result=maharashtra,mh
+      [PASS] area_distance: 1.0 km from pin area (verified <= 3.0 km, limit <= 10 km)
+    lookups   : full:3/below_threshold | street_postcode:3/below_threshold | landmark_city:0/no_results | area_city:3/below_threshold
+      full    : 64/rejected/STREET@1.0km Jamshedji Tata Road, Fort, Mumbai Zone 1, Mumbai - 400032, MH, India | 64/rejected/STREET@1.0km Jamshedji Tata Road, Churchgate, Mumbai - 400032, MH, India | 64/rejected/STREET@1.1km Jamshedji Tata Road, Fort, Mumbai Zone 1, Mumbai - 400023, MH, India
+      street_postcode: 59/rejected/AREA@1.3km Kasturi Buildings, Jamshedji Tata Road, Fort, Mumbai - 400023, MH, Ind | 36/rejected/AREA@1029.0km 400020, Kasturi Buildings, Ward 62, Chennai - 600002, TN, India | 28/rejected/AREA@1.3km Kasturi Buildings, Churchgate, Mumbai, Mumbai City, India
+      area_city: 36/rejected/AREA@0.0km A Ward, - 400020, MH, India | 35/rejected/AREA@0.0km A Ward, - 400020, MH, India, Mumbai Zone 1 | 20/rejected/CITY@13.4km Mumbai - 400051, MH, India
+    verdict   : approximate/AREA | distance=1.0km | reason=pin_fallback | pin_source=pin_centre | saved=b3155c3e-3820-4eb5-83c4-818716d0cf97
+    rejected  : Jamshedji Tata Road, Churchgate, Mumbai - 400032, MH, India | 18.932665,72.827913 | type=street | precision=STREET
+  candidate 2/2:
+    type      : other
+    extracted : line1=Band Box House, 4th Floor, 254 D, Dr Annie Besant Road | line2=Worli | city=Mumbai | state=Maharashtra | pin=400030 | country=India | evidence=https://nsearchives.nseindia.com/annual_reports/AR_29774_BLUESTARCO_2025_2026_A_16432255_13072026232241.pdf
+    map       : 254, Doctor Annie Besant Road, Lower Parel, Mumbai - 400030, MH, India | lat=19.01136 lon=72.821124 | type=building | precision=BUILDING
+    checks    : 1 failed of 12
+      [PASS] country: expected=in | result=in
+      [PASS] street_level: result_type=building
+      [PASS] match_type: match_type=match_by_building
+      [FAIL] confidence: confidence=0.45
+      [PASS] street_present: street=Doctor Annie Besant Road | postcode=400030
+      [PASS] postcode: expected=400030 | result=400030
+      [PASS] postcode_valid: result=400030
+      [PASS] city: expected=mumbai | result=mumbai
+      [PASS] expected_state: expected=maharashtra | result=maharashtra,mh
+      [PASS] street: expected=band box house 4th floor 254 d dr annie besant road worli | result=doctor annie besant road | house=254
+      [PASS] state: hint=mumbai india (Maharashtra) | result=maharashtra,mh
+      [PASS] area_distance: 0.5 km from pin area (verified <= 3.0 km, limit <= 10 km)
+    lookups   : full:3/approximate/BUILDING@0.5km
+      full    : 107/approximate/BUILDING@0.5km 254, Doctor Annie Besant Road, Lower Parel, Mumbai - 400030, MH, India | 92/rejected/BUILDING@0.1km 254, Dr Annie Besant Road, Worli, Mumbai Zone 2, Mumbai - 400018, MH,  | 92/rejected/BUILDING@0.3km 254, Dr Annie Besant Road, Nehru Nagar, Mumbai Zone 2, Mumbai - 400018
+    verdict   : approximate/BUILDING | distance=0.5km | reason=low_confidence | pin_source=map | saved=dfdbd2e8-52fb-4ce4-b0b3-25ce9ed7e85f
+2026-10-27 18:32:32,992 card-desk.handlers INFO >>> worker called: workers.address (contact cmvqn0g58000h08kz1tj6x12t, Vinayak Joshi)
+2026-10-27 18:32:33,236 card-desk.address-cache INFO address cache hit for Blue Star Limited (2026-10-27T13:02:06)
+2026-10-27 18:32:33,912 card-desk.address-ai WARNING model rejected temperature; extraction is no longer deterministic across runs
+2026-10-27 18:32:54,100 card-desk.worker.address INFO address: verified for Blue Star Limited (2 location(s))
+2026-10-27 18:32:54,101 card-desk.address-attempt INFO ADDRESS_ATTEMPT d47030855a80 (contact cmvqn0g58000h08kz1tj6x12t, Blue Star Limited)
+  time      : 2026-10-27T13:02:32Z | 21.1s
+  outcome   : PASS
+  reason    : verified
+  pages     : 5
+    - https://www.bluestarindia.com/about-us/our-company/credo | Blue Star Limited - Your Cooling and Refrigeration Partner ## Our Origin Story - CIN: L28920MH1949PLC006870 - Telephone No.: +91 22 6654 4000 - Email: investors@bluestarindia.com Registered Office: Ka
+    - https://nsearchives.nseindia.com/annual_reports/AR_29774_BLUESTARCO_2025_2026_A_16432255_13072026232241.pdf | Blue Star Limited Band Box House, 4th Floor, 254 D, Dr Annie Besant Road, Worli, Mumbai 400 030, India. T : +91 22 6654 4000 E : secretarialdesk@bluestarindia.com www.bluestarindia.com July 13, 2026 |
+    - https://www.bluestarindia.com/annual-report-2025-2026/index.html | Blue Star Limited # Blue Star Limited ANNUAL REPORT BLUE STAR LIMITED 2025-26 FORWARD-LOOKING STATEMENTS Certain statements in this report regarding our business operations may constitute forward-look
+    - https://www.bluestarindia.com/media/404949/seintimationbrsrfy26.pdf | Registered Office: Kasturi Buildings, Mohan T Advani Chowk, Jamshedji Tata Road, Mumbai 400 020, India. T: +91 22 6665 4000 CIN: L 28920MH1949PLC 006870 Blue Star Limited Band Box House, 4th Floor, 25
+    - https://www.bluestarindia.com/about-us | About Blue Star - 80+ Years of HVAC&R Innovation & Excellence Dealer Locator Contact Us Our Global Presence Buy Now About Us Products Projects Services Investors & Press Over 80 Years of Innovation an
+  extracted : line1=Kasturi Buildings, Jamshedji Tata Road | line2=Mohan T Advani Chowk | city=Mumbai | state=Maharashtra | pin=400020 | country=India | evidence=https://www.bluestarindia.com/about-us/our-company/credo
+  map       : Jamshedji Tata Road, Churchgate, Mumbai - 400032, MH, India | lat=18.932665 lon=72.827913 | type=street | match=match_by_street conf=0.5 | precision=STREET | place=51babbce86fc34524059b41f2922c3ee3240f00102f9017436f25700000000c002049203134a616d
+  checks    : 1 failed of 12
+    [PASS] country: expected=in | result=in
+    [PASS] street_level: result_type=street
+    [PASS] match_type: match_type=match_by_street
+    [PASS] confidence: confidence=0.5
+    [PASS] street_present: street=Jamshedji Tata Road | postcode=400032
+    [FAIL] postcode: expected=400020 | result=400032
+    [PASS] postcode_valid: result=400032
+    [PASS] city: expected=mumbai | result=mumbai
+    [PASS] expected_state: expected=maharashtra | result=maharashtra,mh
+    [PASS] street: expected=kasturi buildings jamshedji tata road mohan t advani chowk | result=jamshedji tata road | house=-
+    [PASS] state: hint=mumbai india (Maharashtra) | result=maharashtra,mh
+    [PASS] area_distance: 1.0 km from pin area (verified <= 3.0 km, limit <= 10 km)
+  review    : pin_fallback ; postcode_mismatch
+  notes     : cache hit: pages=5 fetched=2026-10-27T13:02:06 ; address candidates: valid=2 rejected=0 ; other address: registered Kasturi Buildings, Jamshedji Tata Road ; area from pin 400030 (Mumbai, geoapify) ; saved verified/BUILDING at Mumbai ; area from pin 400020 (Mumbai, geoapify) ; full: no result above score 50 ; street_postcode: no result above score 50 ; landmark results filtered: 3 outside name overlap or 2 km ; area_city: no result above score 30 ; saved approximate/AREA from pin_centre (map: postcode_mismatch) ; primary location: 0be0c548-15f0-46c2-bb65-516ff735f973 ; saved locations: 2 of 2 candidates
+  lookups   : full:3/verified/BUILDING@0.7km | full:3/below_threshold | street_postcode:3/below_threshold | landmark_city:0/no_results | area_city:3/below_threshold
+              worked: full
+  candidates: 2 (saved=2, primary=2)
+  candidate 1/2:
+    type      : head_office
+    extracted : line1=254 D, Dr Annie Besant Road | line2=Band Box House, 4th Floor, Worli | city=Mumbai | state=Maharashtra | pin=400030 | country=India | evidence=https://nsearchives.nseindia.com/annual_reports/AR_29774_BLUESTARCO_2025_2026_A_16432255_13072026232241.pdf
+    map       : 254, Dr Annie Besant Road, Worli, Mumbai - 400030, MH, India | lat=19.001881 lon=72.815754 | type=building | precision=BUILDING
+    checks    : 0 failed of 12
+      [PASS] country: expected=in | result=in
+      [PASS] street_level: result_type=building
+      [PASS] match_type: match_type=full_match
+      [PASS] confidence: confidence=0.5
+      [PASS] street_present: street=Dr Annie Besant Road | postcode=400030
+      [PASS] postcode: expected=400030 | result=400030
+      [PASS] postcode_valid: result=400030
+      [PASS] city: expected=mumbai | result=mumbai
+      [PASS] expected_state: expected=maharashtra | result=maharashtra,mh
+      [PASS] street: expected=254 d dr annie besant road band box house 4th floor worli | result=dr annie besant road | house=254
+      [PASS] state: hint=mumbai india (Maharashtra) | result=maharashtra,mh
+      [PASS] area_distance: 0.7 km from pin area (verified <= 3.0 km, limit <= 10 km)
+    lookups   : full:3/verified/BUILDING@0.7km
+      full    : 107/verified/BUILDING@0.7km 254, Dr Annie Besant Road, Worli, Mumbai - 400030, MH, India | 92/rejected/BUILDING@0.1km 254, Dr Annie Besant Road, Worli, Mumbai - 400018, MH, India | 92/rejected/BUILDING@0.5km 254, Doctor Annie Besant Road, Worli, Mumbai - 400018, MH, India
+    verdict   : verified/BUILDING | distance=0.7km | reason=ok | pin_source=map | saved=0be0c548-15f0-46c2-bb65-516ff735f973
+  candidate 2/2:
+    type      : registered
+    extracted : line1=Kasturi Buildings, Jamshedji Tata Road | line2=Mohan T Advani Chowk | city=Mumbai | state=Maharashtra | pin=400020 | country=India | evidence=https://www.bluestarindia.com/about-us/our-company/credo
+    map       : Jamshedji Tata Road, Churchgate, Mumbai - 400032, MH, India | lat=18.932665 lon=72.827913 | type=street | precision=STREET
+    checks    : 1 failed of 12
+      [PASS] country: expected=in | result=in
+      [PASS] street_level: result_type=street
+      [PASS] match_type: match_type=match_by_street
+      [PASS] confidence: confidence=0.5
+      [PASS] street_present: street=Jamshedji Tata Road | postcode=400032
+      [FAIL] postcode: expected=400020 | result=400032
+      [PASS] postcode_valid: result=400032
+      [PASS] city: expected=mumbai | result=mumbai
+      [PASS] expected_state: expected=maharashtra | result=maharashtra,mh
+      [PASS] street: expected=kasturi buildings jamshedji tata road mohan t advani chowk | result=jamshedji tata road | house=-
+      [PASS] state: hint=mumbai india (Maharashtra) | result=maharashtra,mh
+      [PASS] area_distance: 1.0 km from pin area (verified <= 3.0 km, limit <= 10 km)
+    lookups   : full:3/below_threshold | street_postcode:3/below_threshold | landmark_city:0/no_results | area_city:3/below_threshold
+      full    : 64/rejected/STREET@1.0km Jamshedji Tata Road, Fort, Mumbai Zone 1, Mumbai - 400032, MH, India | 64/rejected/STREET@1.0km Jamshedji Tata Road, Churchgate, Mumbai - 400032, MH, India | 64/rejected/STREET@1.1km Jamshedji Tata Road, Fort, Mumbai Zone 1, Mumbai - 400023, MH, India
+      street_postcode: 59/rejected/AREA@1.3km Kasturi Buildings, Jamshedji Tata Road, Fort, Mumbai - 400023, MH, Ind | 36/rejected/AREA@1029.0km 400020, Kasturi Buildings, Ward 62, Chennai - 600002, TN, India | 28/rejected/AREA@1.3km Kasturi Buildings, Churchgate, Mumbai, Mumbai City, India
+      area_city: 36/rejected/AREA@0.0km A Ward, - 400020, MH, India | 35/rejected/AREA@0.0km A Ward, - 400020, MH, India, Mumbai Zone 1 | 20/rejected/CITY@13.4km Mumbai - 400051, MH, India
+    verdict   : approximate/AREA | distance=1.0km | reason=pin_fallback | pin_source=pin_centre | saved=96d3b3bb-74a0-446d-9d89-10fa53bddd26
+    rejected  : Jamshedji Tata Road, Churchgate, Mumbai - 400032, MH, India | 18.932665,72.827913 | type=street | precision=STREET
+2026-10-27 18:32:54,101 card-desk.handlers INFO >>> worker called: workers.address (contact cmvqmxav8000g08kzpevujbo7, Piyush Mehta)
+2026-10-27 18:32:57,914 card-desk.address-ai WARNING model rejected temperature; extraction is no longer deterministic across runs

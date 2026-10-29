@@ -326,6 +326,31 @@ def test_international_country_check_uses_expected_code():
     assert country["passed"] is False
 
 
+def test_country_filter_recognises_observed_foreign_locations():
+    assert geo.country_filter_for("Kampala, Uganda") == "ug"
+    assert geo.country_filter_for("Nairobi") == "ke"
+    assert geo.country_filter_for("Dar Es Salaam, Tanzania") == "tz"
+    assert geo.country_filter_for("Kigali, Rwanda") == "rw"
+    assert geo.country_filter_for("Maputo") == "mz"
+    assert geo.country_filter_for("Mamprobi - Accra") == "gh"
+    assert geo.country_filter_for(
+        "Milton Keynes, Buckinghamshire, England") == "gb"
+    assert geo.country_filter_for("Geneva, Switzerland") == "ch"
+    assert geo.country_filter_for("Tehran, Iran") == "ir"
+
+
+def test_country_filter_unknown_is_not_india():
+    assert geo.country_filter_for("Somewhere Unmapped") == ""
+    assert geo.country_filter_for("Nallasopara (E), Palghar") == "in"
+    assert geo.country_filter_for("Thane (W) - 400601") == "in"
+    # No country check when the expected code is unknown.
+    checks = geo.check_all(_result(country_code="ug"), "Somewhere Unmapped",
+                           _expected(), country_code="")
+    country = [item for item in checks if item["name"] == "country"][0]
+    assert country["passed"] is True
+
+
+
 def test_result_precision_uses_geocoder_result_not_extracted_street():
     assert geo.result_precision(_result(result_type="building")) == "STREET"
     assert geo.result_precision(_result(result_type="suburb", street=None,

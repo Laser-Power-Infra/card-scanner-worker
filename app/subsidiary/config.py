@@ -12,7 +12,7 @@ OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", "")
 LLM_MODEL = os.environ.get("LLM_MODEL", "gpt-6-luna")
 # Reasoning models reject `temperature`; leave empty to omit the field entirely.
 LLM_TEMPERATURE = os.environ.get("LLM_TEMPERATURE", "0")
-SEARCH_PRIORITY = os.environ.get("SEARCH_PRIORITY", "tavily,exa,serpapi")
+SEARCH_PRIORITY = os.environ.get("SEARCH_PRIORITY", "tavily,exa,firecrawl,serpapi")
 SEARCH_MAX_RESULTS = int(os.environ.get("SEARCH_MAX_RESULTS", "5"))
 SEARCH_SOFT_COOLDOWN = int(os.environ.get("SEARCH_SOFT_COOLDOWN", "60"))
 SEARCH_CREDIT_COOLDOWN = int(os.environ.get("SEARCH_CREDIT_COOLDOWN", "21600"))

@@ -1,3 +1,4 @@
+import json
 import os
 
 import pytest
@@ -102,3 +103,154 @@ def test_key_suffix_sort_is_numeric(monkeypatch):
 def test_no_configured_search_key_pauses(monkeypatch):
     with pytest.raises(search.SearchExhausted):
         search.search("example company")
+
+
+class _FakeResponse:
+    def __init__(self, payload, status_code=200):
+        self._payload = payload
+        self.status_code = status_code
+        self.text = json.dumps(payload)
+        self.headers = {"content-type": "application/json"}
+
+    def json(self):
+        return self._payload
+
+    def raise_for_status(self):
+        if self.status_code >= 400:
+            raise search.requests.HTTPError("status %s" % self.status_code)
+
+
+def test_firecrawl_scrapes_markdown_and_sends_domain_filter(monkeypatch):
+    calls = []
+    payload = {"success": True, "data": {"web": [
+        {"url": "https://a.example", "title": "A",
+         "markdown": "# A\nbusiness", "description": "short"},
+        {"url": "https://b.example", "title": "B", "description": "fallback"},
+        {"title": "no url"},
+    ]}}
+
+    def fake_post(url, json=None, headers=None, timeout=None):
+        calls.append({"url": url, "body": json, "headers": headers,
+                      "timeout": timeout})
+        return _FakeResponse(payload)
+
+    monkeypatch.setattr(search.requests, "post", fake_post)
+    results = search._firecrawl("query", "fc-key", ["example.com"])
+
+    assert [item["url"] for item in results] == ["https://a.example",
+                                                 "https://b.example"]
+    assert results[0]["text"] == "# A\nbusiness"
+    assert results[1]["text"] == "fallback"
+    call = calls[0]
+    assert call["url"] == "https://api.firecrawl.dev/v2/search"
+    assert call["headers"]["Authorization"] == "Bearer fc-key"
+    assert call["body"]["query"] == "query"
+    assert call["body"]["limit"] == search.config.SEARCH_MAX_RESULTS
+    assert call["body"]["sources"] == [{"type": "web"}]
+    assert call["body"]["includeDomains"] == ["example.com"]
+    assert call["body"]["scrapeOptions"] == {
+        "formats": ["markdown"], "onlyMainContent": True,
+        "timeout": search.config.SEARCH_SCRAPE_TIMEOUT * 1000}
+    assert call["timeout"] == search.config.SEARCH_SCRAPE_TIMEOUT + 20
+
+
+def test_firecrawl_omits_domain_filter_without_domains(monkeypatch):
+    calls = []
+
+    def fake_post(url, json=None, headers=None, timeout=None):
+        calls.append(json)
+        return _FakeResponse({"success": True, "data": {"web": []}})
+
+    monkeypatch.setattr(search.requests, "post", fake_post)
+    assert search._firecrawl("query", "fc-key", []) == []
+    assert "includeDomains" not in calls[0]
+
+
+def test_firecrawl_accepts_v1_list_payload(monkeypatch):
+    payload = {"success": True, "data": [
+        {"url": "https://a.example", "title": "A", "description": "desc"}]}
+    monkeypatch.setattr(search.requests, "post",
+                        lambda *args, **kwargs: _FakeResponse(payload))
+    assert search._firecrawl("query", "fc-key", []) == [
+        {"title": "A", "url": "https://a.example", "text": "desc"}]
+
+
+def test_firecrawl_credit_failure_is_hard_rate_limit(monkeypatch):
+    payload = {"success": False, "error": "Insufficient credits remaining"}
+    monkeypatch.setattr(search.requests, "post",
+                        lambda *args, **kwargs: _FakeResponse(payload))
+    with pytest.raises(search.RateLimited) as excinfo:
+        search._firecrawl("query", "fc-key", [])
+    assert excinfo.value.hard
+
+
+def test_firecrawl_other_failure_is_transient(monkeypatch):
+    payload = {"success": False, "error": "unable to process request"}
+    monkeypatch.setattr(search.requests, "post",
+                        lambda *args, **kwargs: _FakeResponse(payload))
+    with pytest.raises(search.TransientError):
+        search._firecrawl("query", "fc-key", [])
+
+
+def test_firecrawl_key_discovered_in_priority_order(monkeypatch):
+    monkeypatch.setenv("SEARCH_EXA_API_KEY", "exa")
+    monkeypatch.setenv("SEARCH_FIRECRAWL_API_KEY", "fc")
+    monkeypatch.setattr(search.config, "SEARCH_PRIORITY", "exa,firecrawl")
+    keys = search._ordered_keys()
+    assert [(provider, value) for provider, _, value in keys] == [
+        ("exa", "exa"), ("firecrawl", "fc")]
+
+
+def test_empty_provider_falls_through_to_firecrawl(monkeypatch):
+    monkeypatch.setenv("SEARCH_TAVILY_API_KEY", "tavily")
+    monkeypatch.setenv("SEARCH_FIRECRAWL_API_KEY", "fc")
+    monkeypatch.setattr(search.config, "SEARCH_PRIORITY", "tavily,firecrawl")
+    calls = []
+
+    def tavily(query, key, domains):
+        calls.append("tavily")
+        return []
+
+    def firecrawl(query, key, domains):
+        calls.append("firecrawl")
+        return [{"title": "ok", "url": "https://example.com", "text": "body"}]
+
+    monkeypatch.setitem(search._ADAPTERS, "tavily", tavily)
+    monkeypatch.setitem(search._ADAPTERS, "firecrawl", firecrawl)
+    result = search.search("example company")
+    assert result[0]["url"] == "https://example.com"
+    assert calls == ["tavily", "firecrawl"]
+
+
+def test_serpapi_out_of_searches_is_hard_rate_limit(monkeypatch):
+    payload = {"error": "Your account has run out of searches."}
+    monkeypatch.setattr(search.requests, "get",
+                        lambda *args, **kwargs: _FakeResponse(payload))
+    with pytest.raises(search.RateLimited) as excinfo:
+        search._serpapi("query", "serp-key", [])
+    assert excinfo.value.hard
+
+
+def test_serpapi_out_of_searches_is_not_retried(monkeypatch):
+    monkeypatch.setenv("SEARCH_SERPAPI_API_KEY", "serp")
+    monkeypatch.setattr(search.config, "SEARCH_PRIORITY", "serpapi")
+    calls = []
+
+    def fake_get(*args, **kwargs):
+        calls.append(1)
+        return _FakeResponse({"error": "Your account has run out of searches."})
+
+    monkeypatch.setattr(search.requests, "get", fake_get)
+    with pytest.raises(search.SearchExhausted):
+        search.search("example company")
+    assert len(calls) == 1
+    assert search._cooldown_until["SEARCH_SERPAPI_API_KEY"] > 0
+
+
+def test_exhausted_quota_message_is_hard_rate_limit(monkeypatch):
+    payload = {"success": False, "error": "Search credits exhausted for this key"}
+    monkeypatch.setattr(search.requests, "post",
+                        lambda *args, **kwargs: _FakeResponse(payload))
+    with pytest.raises(search.RateLimited) as excinfo:
+        search._firecrawl("query", "fc-key", [])
+    assert excinfo.value.hard

@@ -353,7 +353,7 @@ def _valid_addresses(raw_addresses, pages, country_code="in",
     plus private keys prefixed with ``_`` for provenance.
     """
     valid, rejected = [], []
-    india = (country_code or "in").lower() == "in"
+    india = str(country_code or "").lower() == "in"
     for raw in raw_addresses or []:
         cleaned = address_ai.strip_po_box(raw)
         page = _quote_page(cleaned, pages)
@@ -964,7 +964,7 @@ def run(task):
         chosen = ordered[0] if ordered else None
         _note_candidates(attempt, valid, rejected, chosen)
         notes = attempt["notes"]
-        if country_filter != "in":
+        if country_filter and country_filter != "in":
             notes.append("international contact: expected country %s"
                          % country_filter)
 

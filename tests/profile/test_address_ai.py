@@ -128,3 +128,45 @@ def test_permanent_4xx_is_not_retried(monkeypatch):
     monkeypatch.setattr(address_ai.config, "OPENAI_API_KEY", "test-key")
     assert address_ai.extract_company_addresses("Acme", None, ["page"]) == []
     assert len(calls) == 1
+
+
+def test_loads_json_repairs_unescaped_inner_quotes():
+    raw = ('{"addresses": [{"address_line1": "Shed "A", Sai Dham", '
+           '"quote": "Shed "A", Sai Dham Complex"}]}')
+    data = address_ai._loads_json(raw)
+    assert data["addresses"][0]["address_line1"] == 'Shed "A", Sai Dham'
+    assert data["addresses"][0]["quote"] == 'Shed "A", Sai Dham Complex'
+
+
+def test_loads_json_repairs_raw_newlines_in_strings():
+    raw = '{"a": "line one\nline two", "b": 1}'
+    parsed = address_ai._loads_json(raw)
+    assert parsed["a"] == "line one\nline two"
+    assert parsed["b"] == 1
+
+
+def test_loads_json_leaves_valid_json_alone():
+    raw = '{"addresses": [{"address_line1": "10 MG Road"}]}'
+    assert address_ai._loads_json(raw)["addresses"][0]["address_line1"] == "10 MG Road"
+
+
+def test_extract_recovers_address_with_quoted_text(monkeypatch):
+    body = ('{"addresses": [{"address_line1": "Shed "A", Sai Dham", '
+            '"address_line2": "", "city": "Pune", '
+            '"state": "Maharashtra", "postal_code": "411001", '
+            '"country": "India", "address_type": "other", '
+            '"evidence_url": "https://example.com", "quote": "x"}]}')
+
+    class Resp:
+        status_code = 200
+        text = ""
+
+        def json(self):
+            return {"output": [{"type": "message", "content": [
+                {"type": "output_text", "text": body}]}]}
+
+    monkeypatch.setattr(address_ai.requests, "post", lambda *a, **k: Resp())
+    monkeypatch.setattr(address_ai.config, "OPENAI_API_KEY", "test-key")
+    result = address_ai.extract_company_addresses("Acme", None, ["page"])
+    assert len(result) == 1
+    assert result[0]["address_line1"] == 'Shed "A", Sai Dham'

@@ -89,6 +89,23 @@ python -m scripts.subsidiary_publish_sample "Example Cable Works" --publish
 python -m scripts.subsidiary_eval_thresholds
 ```
 
+## Search providers
+
+The subsidiary matcher discovers providers from `SEARCH_*_API_KEY` variables
+and tries them in `SEARCH_PRIORITY` order, round-robin across keys with
+per-key cooldowns. Extras: `SEARCH_<PROVIDER>_API_KEY_2`, `_3`, ... add more
+keys for the same provider.
+
+| Provider | Variable | Endpoint | Returns page body |
+|---|---|---|---|
+| Tavily | `SEARCH_TAVILY_API_KEY` | `api.tavily.com/search` | yes |
+| Exa | `SEARCH_EXA_API_KEY` | `api.exa.ai/search` | yes (text) |
+| Firecrawl | `SEARCH_FIRECRAWL_API_KEY` | `api.firecrawl.dev/v2/search` | yes (markdown, scraped in the same call) |
+| SerpAPI | `SEARCH_SERPAPI_API_KEY` | `serpapi.com/search.json` | no; pages fetched directly |
+
+Firecrawl costs one search plus one scrape per result, so `SEARCH_MAX_RESULTS`
+directly controls spend and latency.
+
 ## Address pass
 
 The address worker extracts company addresses from the company site and search

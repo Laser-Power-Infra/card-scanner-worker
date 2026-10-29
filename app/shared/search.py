@@ -9,7 +9,7 @@ from urllib.parse import urlparse
 import requests
 
 class _Config:
-    SEARCH_PRIORITY = os.environ.get("SEARCH_PRIORITY", "tavily,exa,serpapi")
+    SEARCH_PRIORITY = os.environ.get("SEARCH_PRIORITY", "tavily,exa,firecrawl,serpapi")
     SEARCH_MAX_RESULTS = int(os.environ.get("SEARCH_MAX_RESULTS", "5"))
     SEARCH_SOFT_COOLDOWN = int(os.environ.get("SEARCH_SOFT_COOLDOWN", "60"))
     SEARCH_CREDIT_COOLDOWN = int(os.environ.get("SEARCH_CREDIT_COOLDOWN", "21600"))
@@ -43,7 +43,9 @@ class NoSearchResults(Exception):
 
 _count = 0
 _cooldown_until = {}
-_CREDIT_RE = re.compile(r"credit|quota|billing|limit reached|insufficient", re.I)
+_CREDIT_RE = re.compile(
+    r"credit|quota|billing|limit reached|insufficient|out of searches|exhausted",
+    re.I)
 _GENERIC_EMAIL_DOMAINS = {
     "gmail.com", "googlemail.com", "yahoo.com", "yahoo.co.in", "outlook.com",
     "hotmail.com", "live.com", "msn.com", "icloud.com", "protonmail.com",
@@ -136,6 +138,44 @@ def _exa(query, key, domains):
             for r in data.get("results", []) if r.get("url")]
 
 
+def _firecrawl(query, key, domains):
+    body = {
+        "query": query,
+        "limit": config.SEARCH_MAX_RESULTS,
+        "sources": [{"type": "web"}],
+        # Scrape markdown in the same request so extraction gets page bodies,
+        # not just the SERP-style description.
+        "scrapeOptions": {
+            "formats": ["markdown"],
+            "onlyMainContent": True,
+            "timeout": config.SEARCH_SCRAPE_TIMEOUT * 1000,
+        },
+    }
+    if domains:
+        body["includeDomains"] = domains
+    response = requests.post("https://api.firecrawl.dev/v2/search", json=body,
+                             headers={"Authorization": "Bearer " + key},
+                             timeout=config.SEARCH_SCRAPE_TIMEOUT + 20)
+    data = _response(response, "firecrawl")
+    # Firecrawl reports application-level failures with HTTP 200 + success=false.
+    if data.get("success") is False:
+        error = str(data.get("error", ""))
+        if _CREDIT_RE.search(error):
+            raise RateLimited(error, hard=True)
+        raise TransientError(error or "firecrawl search failed")
+    payload = data.get("data")
+    # v2 returns {"web": [...]}; v1 returned a bare list. Accept both.
+    if isinstance(payload, dict):
+        items = payload.get("web") or []
+    elif isinstance(payload, list):
+        items = payload
+    else:
+        items = []
+    return [{"title": item.get("title", ""), "url": item.get("url", ""),
+             "text": (item.get("markdown") or item.get("description") or "")[:12000]}
+            for item in items if item.get("url")]
+
+
 def _serpapi(query, key, _domains):
     response = requests.get("https://serpapi.com/search.json",
                             params={"engine": "google", "q": query,
@@ -167,7 +207,8 @@ def _serpapi(query, key, _domains):
     return results
 
 
-_ADAPTERS = {"tavily": _tavily, "exa": _exa, "serpapi": _serpapi}
+_ADAPTERS = {"tavily": _tavily, "exa": _exa, "firecrawl": _firecrawl,
+             "serpapi": _serpapi}
 
 
 def _direct_domain(domains):
