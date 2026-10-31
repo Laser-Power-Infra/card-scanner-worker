@@ -11,7 +11,7 @@ research worker:
     other_web_profiles, company_details, official_site, company_core_business,
     location, enrich_sources
 
-Cost controls (set in .env): ENRICH_MODEL (default gpt-5.4-mini),
+Cost controls (set in .env): ENRICH_MODEL (default gpt-6-luna),
 ENRICH_EFFORT (low), SEARCH_CONTEXT (medium).
 """
 import json

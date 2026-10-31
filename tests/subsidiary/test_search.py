@@ -36,14 +36,14 @@ def test_search_retries_once_after_rate_limit(monkeypatch):
 
     attempts = {"tavily": 0}
 
-    def tavily(query, key, domains):
+    def tavily(query, key, domains, lean=False):
         calls.append("tavily")
         attempts["tavily"] += 1
         if attempts["tavily"] == 1:
             raise search.RateLimited("429")
         return [{"title": "ok", "url": "https://example.com", "text": "business"}]
 
-    def exa(query, key, domains):
+    def exa(query, key, domains, lean=False):
         calls.append("exa")
         return [{"title": "ok", "url": "https://example.com", "text": "business"}]
 
@@ -59,11 +59,11 @@ def test_hard_rate_limit_is_not_retried_and_enters_cooldown(monkeypatch):
     monkeypatch.setenv("SEARCH_EXA_API_KEY", "exa")
     calls = []
 
-    def tavily(query, key, domains):
+    def tavily(query, key, domains, lean=False):
         calls.append("tavily")
         raise search.RateLimited("432", hard=True)
 
-    def exa(query, key, domains):
+    def exa(query, key, domains, lean=False):
         calls.append("exa")
         return [{"title": "ok", "url": "https://example.com", "text": "business"}]
 
@@ -82,7 +82,7 @@ def test_empty_results_try_other_provider_without_marking_failure(monkeypatch):
     monkeypatch.setenv("SEARCH_EXA_API_KEY", "exa")
     calls = []
 
-    def empty(query, key, domains):
+    def empty(query, key, domains, lean=False):
         calls.append(key)
         return [] if key == "tavily" else [{"title": "found", "url": "https://example.com", "text": "text"}]
 
@@ -154,6 +154,21 @@ def test_firecrawl_scrapes_markdown_and_sends_domain_filter(monkeypatch):
     assert call["timeout"] == search.config.SEARCH_SCRAPE_TIMEOUT + 20
 
 
+def test_firecrawl_lean_skips_scrape_options(monkeypatch):
+    calls = []
+
+    def fake_post(url, json=None, headers=None, timeout=None):
+        calls.append(json)
+        return _FakeResponse({"success": True, "data": {"web": [
+            {"url": "https://a.example", "title": "A",
+             "description": "desc"}]}})
+
+    monkeypatch.setattr(search.requests, "post", fake_post)
+    results = search._firecrawl("query", "fc-key", [], lean=True)
+    assert "scrapeOptions" not in calls[0]
+    assert results[0]["text"] == "desc"
+
+
 def test_firecrawl_omits_domain_filter_without_domains(monkeypatch):
     calls = []
 
@@ -207,11 +222,11 @@ def test_empty_provider_falls_through_to_firecrawl(monkeypatch):
     monkeypatch.setattr(search.config, "SEARCH_PRIORITY", "tavily,firecrawl")
     calls = []
 
-    def tavily(query, key, domains):
+    def tavily(query, key, domains, lean=False):
         calls.append("tavily")
         return []
 
-    def firecrawl(query, key, domains):
+    def firecrawl(query, key, domains, lean=False):
         calls.append("firecrawl")
         return [{"title": "ok", "url": "https://example.com", "text": "body"}]
 

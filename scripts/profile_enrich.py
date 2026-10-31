@@ -135,7 +135,16 @@ def main():
         payloads = [_payload(p, r) for r in rows]
         if args.inline:
             for pl in payloads:
-                print(pl["contactId"], handlers.process_payload(pl))
+                result = handlers.process_payload(pl)
+                print(pl["contactId"], result)
+                # A paused result means search providers are exhausted, not
+                # that this contact failed. Stop the slice so the wrapper
+                # exits instead of burning attempts on every remaining row.
+                if (isinstance(result, tuple) and len(result) == 2
+                        and isinstance(result[1], dict)
+                        and result[1].get("paused")):
+                    print("search providers exhausted; stopping this run")
+                    raise SystemExit(0)
         else:
             _publish(payloads)
             print("published %d jobs to %s" % (len(payloads),

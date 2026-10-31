@@ -110,3 +110,47 @@ def test_merge_company_location_folds_repeat_sighting(monkeypatch):
     assert updated["status"] == "VERIFIED"
     assert updated["address_line2"] == "Park Street"
 
+
+def test_sync_contact_from_primary_fills_only_blank_columns(monkeypatch):
+    captured = {}
+    monkeypatch.setattr(
+        db, "_run",
+        lambda sql, params=None: captured.update(sql=sql, params=params))
+
+    db.sync_contact_from_primary("c1", _candidate(
+        city="Kolkata", state="West Bengal", country="India"))
+
+    sql = captured["sql"]
+    # Every card/user-owned column is guarded by the same fill-if-blank rule.
+    for column in ("companyLocation", "address", "state", "country"):
+        assert '"%s" = COALESCE(NULLIF(btrim("%s"), \'\'), %%s)' % (
+            column, column) in sql
+    assert list(captured["params"]) == [
+        "Kolkata, West Bengal",
+        "12 Park Street, Kolkata, West Bengal, 700022, India",
+        "West Bengal",
+        "India",
+        "c1",
+    ]
+
+
+def test_sync_contact_from_primary_drops_blank_location_parts(monkeypatch):
+    captured = {}
+    monkeypatch.setattr(
+        db, "_run",
+        lambda sql, params=None: captured.update(sql=sql, params=params))
+
+    db.sync_contact_from_primary("c1", _candidate(
+        address_line1="", address_line2="", state="", country="",
+        postal_code=""))
+
+    assert list(captured["params"]) == ["Kolkata", "Kolkata", "", "", "c1"]
+
+
+def test_sync_contact_from_primary_noop_without_location(monkeypatch):
+    monkeypatch.setattr(
+        db, "_run",
+        lambda *a, **k: (_ for _ in ()).throw(AssertionError("no write")))
+    db.sync_contact_from_primary("c1", None)
+    db.sync_contact_from_primary(None, _candidate())
+

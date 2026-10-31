@@ -50,7 +50,7 @@ def _wire(monkeypatch, caplog, *, company="Acme", company_location="West Bengal"
           pages=None, extracted=_EXTRACTED, cached=None,
           geo_result="default", retrieve_error=None, area=None):
     caplog.set_level(logging.INFO, logger="card-desk.address-attempt")
-    writes = {"failed": 0, "locations": [], "cache": 0}
+    writes = {"failed": 0, "locations": [], "cache": 0, "contact_sync": []}
 
     monkeypatch.setattr(address.db, "address_schema_ok", lambda: True)
     monkeypatch.setattr(address.db, "location_cache_schema_ok", lambda: True)
@@ -68,8 +68,9 @@ def _wire(monkeypatch, caplog, *, company="Acme", company_location="West Bengal"
         return dict(primary or candidate, id="loc-1")
 
     monkeypatch.setattr(address.db, "merge_company_location", merge_location)
-    monkeypatch.setattr(address.db, "set_company_location_if_empty",
-                        lambda *a: None)
+    monkeypatch.setattr(
+        address.db, "sync_contact_from_primary",
+        lambda cid, location: writes["contact_sync"].append((cid, location)))
     monkeypatch.setattr(
         address.db, "upsert_location_cache",
         lambda *a: writes.__setitem__("cache", writes["cache"] + 1))
@@ -111,6 +112,16 @@ def _wire(monkeypatch, caplog, *, company="Acme", company_location="West Bengal"
 
 def _run():
     return address.run({"contactId": "c1", "tag": "address", "snapshot": {}})
+
+
+def test_search_exhaustion_pauses_without_consuming_attempt(monkeypatch, caplog):
+    writes = _wire(
+        monkeypatch, caplog,
+        retrieve_error=address.search_mod.SearchExhausted("all cooling down"))
+    result = _run()
+    assert result["paused"] is True
+    assert result["reason"] == "search_exhausted"
+    assert writes["failed"] == 0
 
 
 def _recorded_reason(caplog):
@@ -308,6 +319,25 @@ def test_low_confidence_is_saved_approximate(monkeypatch, caplog):
     assert result["ok"] is True
     assert result["reason"] == "approximate"
     assert writes["locations"][0]["status"] == "APPROXIMATE"
+
+
+def test_verified_primary_fills_blank_contact_columns(monkeypatch, caplog):
+    writes = _wire(monkeypatch, caplog)
+    result = _run()
+    assert result["reason"] == "verified"
+    assert len(writes["contact_sync"]) == 1
+    contact_id, location = writes["contact_sync"][0]
+    assert contact_id == "c1"
+    assert location["status"] == "VERIFIED"
+    assert location["address_line1"] == "12 Park Street"
+
+
+def test_approximate_primary_does_not_touch_contact(monkeypatch, caplog):
+    writes = _wire(monkeypatch, caplog, area=(22.5, 88.3),
+                   geo_result=_geo_result(postcode="700001", city="Howrah"))
+    result = _run()
+    assert result["reason"] == "approximate"
+    assert writes["contact_sync"] == []
 
 
 def test_area_distance_does_not_override_hard_city_postcode(monkeypatch, caplog):

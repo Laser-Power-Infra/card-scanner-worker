@@ -23,7 +23,7 @@ QUEUE_PROFILE_COLLECTION = os.environ.get(
 # OpenAI — used by the workers (Responses API + built-in web_search) to find
 # real profile URLs, bios and company details. Same key as the Next.js app.
 OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", "")
-ENRICH_MODEL = os.environ.get("ENRICH_MODEL", "gpt-5.4-mini")
+ENRICH_MODEL = os.environ.get("ENRICH_MODEL", "gpt-6-luna")
 ENRICH_EFFORT = os.environ.get("ENRICH_EFFORT", "low")
 SEARCH_CONTEXT = os.environ.get("SEARCH_CONTEXT", "medium")
 

@@ -361,12 +361,41 @@ def mark_address_failed(contact_id):
          "updated_at = now() WHERE contact_id = %s", (contact_id,))
 
 
-def set_company_location_if_empty(contact_id, value):
-    if not value:
+def _location_text(location, keys):
+    """Join the non-empty parts of a location, in the given column order."""
+    parts = []
+    for key in keys:
+        value = (location or {}).get(key)
+        text = str(value).strip() if value is not None else ""
+        if text:
+            parts.append(text)
+    return ", ".join(parts)
+
+
+def sync_contact_from_primary(contact_id, location):
+    """Fill blank Contact location columns from a verified primary location.
+
+    Card/user values always win: every column is written only when it is empty,
+    so this is safe to run on every enrichment pass. The Prisma app reads
+    Contact.companyLocation/address to place a contact on the map and
+    Contact.state/country to filter the directory.
+    """
+    if not contact_id or not location:
         return
-    _run('UPDATE "Contact" SET "companyLocation" = %s '
-         'WHERE "id" = %s AND (coalesce(trim("companyLocation"), \'\') = \'\')',
-         (str(value)[:200], contact_id))
+    company_location = _location_text(location, ("city", "state"))[:200]
+    address = _location_text(location, (
+        "address_line1", "address_line2", "city", "state", "postal_code",
+        "country",))
+    state = (location.get("state") or "").strip()
+    country = (location.get("country") or "").strip()
+    _run(
+        'UPDATE "Contact" SET '
+        '"companyLocation" = COALESCE(NULLIF(btrim("companyLocation"), \'\'), %s), '
+        '"address" = COALESCE(NULLIF(btrim("address"), \'\'), %s), '
+        '"state" = COALESCE(NULLIF(btrim("state"), \'\'), %s), '
+        '"country" = COALESCE(NULLIF(btrim("country"), \'\'), %s) '
+        'WHERE "id" = %s',
+        (company_location, address, state, country, contact_id))
 
 
 def get_location_cache(normalized_query):

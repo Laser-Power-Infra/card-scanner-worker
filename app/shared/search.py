@@ -105,7 +105,7 @@ def _response(response, provider):
     return response.json()
 
 
-def _tavily(query, key, domains):
+def _tavily(query, key, domains, lean=False):
     body = {
         "api_key": key,
         "query": query,
@@ -124,7 +124,7 @@ def _tavily(query, key, domains):
             for r in data.get("results", []) if r.get("url")]
 
 
-def _exa(query, key, domains):
+def _exa(query, key, domains, lean=False):
     body = {"query": query, "numResults": config.SEARCH_MAX_RESULTS,
             "contents": {"text": {"maxCharacters": 12000}}}
     if domains:
@@ -138,19 +138,20 @@ def _exa(query, key, domains):
             for r in data.get("results", []) if r.get("url")]
 
 
-def _firecrawl(query, key, domains):
+def _firecrawl(query, key, domains, lean=False):
     body = {
         "query": query,
         "limit": config.SEARCH_MAX_RESULTS,
         "sources": [{"type": "web"}],
-        # Scrape markdown in the same request so extraction gets page bodies,
-        # not just the SERP-style description.
-        "scrapeOptions": {
+    }
+    # lean=True returns links/descriptions only. Callers that fetch and rank
+    # pages themselves (the address pass) avoid paying for a redundant scrape.
+    if not lean:
+        body["scrapeOptions"] = {
             "formats": ["markdown"],
             "onlyMainContent": True,
             "timeout": config.SEARCH_SCRAPE_TIMEOUT * 1000,
-        },
-    }
+        }
     if domains:
         body["includeDomains"] = domains
     response = requests.post("https://api.firecrawl.dev/v2/search", json=body,
@@ -176,7 +177,7 @@ def _firecrawl(query, key, domains):
             for item in items if item.get("url")]
 
 
-def _serpapi(query, key, _domains):
+def _serpapi(query, key, _domains, lean=False):
     response = requests.get("https://serpapi.com/search.json",
                             params={"engine": "google", "q": query,
                                     "num": config.SEARCH_MAX_RESULTS, "api_key": key},
@@ -247,8 +248,12 @@ def _scrape_domain(domain):
     return []
 
 
-def search(query, domains=None):
-    """Try direct corporate site, then sticky priority with key-level cooldown."""
+def search(query, domains=None, lean=False):
+    """Try direct corporate site, then sticky priority with key-level cooldown.
+
+    ``lean`` asks providers that scrape page bodies in-request to skip that
+    work. Used by callers that fetch and rank pages themselves.
+    """
     global _count
     domains = [d for d in (domains or []) if d]
     domain = _direct_domain(domains)
@@ -289,7 +294,8 @@ def search(query, domains=None):
         empty_result = False
         for _provider_attempt in range(2):
             try:
-                results = adapter(query, key, [domain] if domain else [])
+                results = adapter(query, key, [domain] if domain else [],
+                                  lean=lean)
                 if results:
                     return results
                 log.info("Search provider %s returned no results", provider)

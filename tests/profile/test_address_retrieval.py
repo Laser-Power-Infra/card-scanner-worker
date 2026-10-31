@@ -34,7 +34,7 @@ def test_wider_search_runs_unscoped_when_no_site_address(monkeypatch):
         return _page(url, "Welcome. Head Office. About Us. Contact Us. "
                           "Products and services for our customers. " * 5)
 
-    def search(query, domains=None):
+    def search(query, domains=None, lean=False):
         calls.append(domains)
         return [_page("https://directory.example/acme",
                       "Acme Registered Office 5 Park Street Kolkata 700016 "
@@ -52,7 +52,7 @@ def test_scoped_search_is_fallback_when_unscoped_errors(monkeypatch):
     def fetch(url):
         return _page(url, "Welcome. Head Office. About Us. " * 8)
 
-    def search(query, domains=None):
+    def search(query, domains=None, lean=False):
         calls.append(domains)
         if domains is None:
             raise RuntimeError("unscoped unavailable")
@@ -95,7 +95,7 @@ def test_dead_search_result_is_dropped(monkeypatch):
     def fetch(url):
         return _page(url, "Welcome. Head Office. About Us. " * 8)
 
-    def search(query, domains=None):
+    def search(query, domains=None, lean=False):
         return [
             _page("https://dead.example/acme",
                   "Account suspended. This website is suspended. " * 10),

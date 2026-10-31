@@ -251,13 +251,17 @@ def _search_pages(company, company_location, roots, notes):
     for scoped in (False, True):
         try:
             results = search_mod.search(
-                query, domains=roots if scoped else None)
+                query, domains=roots if scoped else None, lean=True)
             if results:
                 for result in results:
                     result["search_result"] = True
                 notes.append("search returned %d results (scoped=%s)"
                              % (len(results), scoped))
                 return results
+        except search_mod.SearchExhausted:
+            # Every provider is cooling down. That is an outage, not a fact
+            # about this contact: abort instead of recording a failure.
+            raise
         except Exception as exc:  # noqa: BLE001 - best effort
             notes.append("search failed for %s (scoped=%s): %s"
                          % (company, scoped, exc))
@@ -457,12 +461,6 @@ def _save_location(contact_id, fields, extracted, website, official_site,
     if primary is not None and saved_id:
         primary = dict(primary)
         primary["_saved_location_id"] = saved_id
-    # Only a verified result may fill the card-owned field, and only when the
-    # contact had no location at all.
-    if (primary and not company_location and primary.get("city")
-            and not low_trust and status == "VERIFIED"):
-        db.set_company_location_if_empty(
-            contact_id, "%s, %s" % (primary["city"], primary.get("state") or ""))
     return primary
 
 
@@ -1041,6 +1039,11 @@ def run(task):
                     item["primary"] = True
                     break
         final = _status_from(primary, matched.get("status") or "APPROXIMATE")
+        # Fill the app-facing Contact columns from an authoritative, trusted
+        # primary only. Explicit step (not a side effect of saving a location),
+        # and fill-only, so card/user text is never overwritten.
+        if primary and final == "verified" and not low_trust:
+            db.sync_contact_from_primary(contact_id, primary)
         fields = (primary if primary and primary.get("address_line1") is not None
                   else matched.get("fields")) or {}
         if review:
@@ -1055,6 +1058,14 @@ def run(task):
                        "address_status": final,
                        **_cache_fields(fields)},
                       "PASS", final, lookups=lookups, candidates=candidates)
+    except search_mod.SearchExhausted as exc:
+        # Do not consume an attempt or poison the failure cache: the contact
+        # was never actually evaluated.
+        address_attempt.note(attempt, "search_exhausted: %s" % exc)
+        log.warning("address: search providers exhausted for %s; pausing", company)
+        return finish({"ok": False, "site": "address",
+                       "reason": "search_exhausted", "paused": True},
+                      "FAIL", "search_exhausted")
     except Exception as exc:  # noqa: BLE001 - record then re-raise
         address_attempt.note(attempt, "%s: %s" % (type(exc).__name__, exc))
         address_attempt.finish(attempt, "FAIL", "unhandled_exception")
